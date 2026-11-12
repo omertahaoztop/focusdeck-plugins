@@ -1,4 +1,18 @@
 [[plugin]]
+name = "gmail"
+description = "Yıldızlı Gmail mailleri"
+version = "0.1.0"
+protocol = 1
+
+[plugin.targets.aarch64-unknown-linux-gnu]
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/gmail-v0.1.0/gmail-aarch64-unknown-linux-gnu"
+sha256 = "dfdccbbec57f87cd3878a110cdaf9f8269cf1aba2363198837d1bd40780a9c92"
+
+[plugin.targets.x86_64-unknown-linux-gnu]
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/gmail-v0.1.0/gmail-x86_64-unknown-linux-gnu"
+sha256 = "7739df4e05f72dcd29a87c76063cdf6182877e0ad316761b58dc4073601ece97"
+
+[[plugin]]
 name = "redmine"
 description = "Bana atanmış açık Redmine işleri"
 version = "0.1.0"
