@@ -1,16 +1,16 @@
 [[plugin]]
 name = "gmail"
 description = "Starred Gmail messages"
-version = "0.1.0"
+version = "0.2.0"
 protocol = 1
 
 [plugin.targets.aarch64-unknown-linux-gnu]
-url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/gmail-v0.1.0/gmail-aarch64-unknown-linux-gnu"
-sha256 = "dfdccbbec57f87cd3878a110cdaf9f8269cf1aba2363198837d1bd40780a9c92"
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/gmail-v0.2.0/gmail-aarch64-unknown-linux-gnu"
+sha256 = "01a172581a9ba28a153c7e4c338b498f81e34d4c8769e3627294dfb2f0ba2537"
 
 [plugin.targets.x86_64-unknown-linux-gnu]
-url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/gmail-v0.1.0/gmail-x86_64-unknown-linux-gnu"
-sha256 = "7739df4e05f72dcd29a87c76063cdf6182877e0ad316761b58dc4073601ece97"
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/gmail-v0.2.0/gmail-x86_64-unknown-linux-gnu"
+sha256 = "c6280c6b77810441e4e4f1d8d55ec8306d13fa43669a28749718a7cb74b617d2"
 
 [[plugin]]
 name = "redmine"
