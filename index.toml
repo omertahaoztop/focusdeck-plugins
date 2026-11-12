@@ -43,13 +43,13 @@ sha256 = "526b777d2ec483f6650fb3d2b71988fb8d7f4431770e8312debb2c9bd6c34122"
 [[plugin]]
 name = "zulip"
 description = "Starred Zulip messages"
-version = "0.1.0"
+version = "0.2.0"
 protocol = 1
 
 [plugin.targets.aarch64-unknown-linux-gnu]
-url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/zulip-v0.1.0/zulip-aarch64-unknown-linux-gnu"
-sha256 = "491316a0f3c6ad97dfe6065b420dfe6c1fe08035d2a55362bf2879c1b652ceea"
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/zulip-v0.2.0/zulip-aarch64-unknown-linux-gnu"
+sha256 = "af3752893a6dd4936bac7e7f5391b57f6e001eebd78bc9e381a3528192f8c4d7"
 
 [plugin.targets.x86_64-unknown-linux-gnu]
-url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/zulip-v0.1.0/zulip-x86_64-unknown-linux-gnu"
-sha256 = "604c7750e732821c83ac054a28d95adf3770f33f8ffdc587f8fa6ee8bf6e92d4"
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/zulip-v0.2.0/zulip-x86_64-unknown-linux-gnu"
+sha256 = "d8b5761f6197ff7c47abc788ae0b147c769a6027174bd6f6fc097ffe938e362e"
