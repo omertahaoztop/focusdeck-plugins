@@ -34,7 +34,7 @@ jobs:
           [[ "$version" =~ ^[0-9A-Za-z.+-]+$ ]] || { echo "Invalid version in tag" >&2; exit 1; }
           package=$(cargo metadata --format-version 1 --no-deps \
             | jq -r --arg pkg "focusdeck-$name" '.packages[] | select(.name == $pkg) | .version')
-          [ -n "$package" ] || { echo "focusdeck-$name paketi yok" >&2; exit 1; }
+          [ -n "$package" ] || { echo "focusdeck-$name package not found" >&2; exit 1; }
           cargo run --locked -p focusdeck-index -- check-tag \
             --tag="$TAG" --name="$name" --version="$package"
           echo "NAME=$name" >> "$GITHUB_ENV"

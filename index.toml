@@ -1,6 +1,6 @@
 [[plugin]]
 name = "gmail"
-description = "Yıldızlı Gmail mailleri"
+description = "Starred Gmail messages"
 version = "0.1.0"
 protocol = 1
 
@@ -14,7 +14,7 @@ sha256 = "7739df4e05f72dcd29a87c76063cdf6182877e0ad316761b58dc4073601ece97"
 
 [[plugin]]
 name = "redmine"
-description = "Bana atanmış açık Redmine işleri"
+description = "Open Redmine issues assigned to me"
 version = "0.1.0"
 protocol = 1
 
@@ -28,7 +28,7 @@ sha256 = "47d90ab9c52b24654ecd37b25b31b4d2b076ab3319af2b047b0023eec98b965f"
 
 [[plugin]]
 name = "vikunja"
-description = "Vikunja projesindeki görevleri listeler, taşır ve not alır"
+description = "Open tasks of a Vikunja project"
 version = "0.1.0"
 protocol = 1
 
@@ -42,7 +42,7 @@ sha256 = "526b777d2ec483f6650fb3d2b71988fb8d7f4431770e8312debb2c9bd6c34122"
 
 [[plugin]]
 name = "zulip"
-description = "Yıldızlı Zulip mesajları"
+description = "Starred Zulip messages"
 version = "0.1.0"
 protocol = 1
 

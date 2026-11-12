@@ -14,7 +14,7 @@ Plugins speak the language focusdeck passes in `FOCUSDECK_LANG`; run directly th
 focusdeck plugin install <name>
 ```
 
-The core picks this machine's target from the `index.toml` index, downloads the binary and checks its sha256. Plugin names: `vikunja`, `redmine`, `zulip`, `gmail`. A plugin's settings go in the `config` table of its box in the profile `~/.config/focusdeck/profiles/<name>.toml` (`config.toml` only holds `default_profile`, `registries` and `capture_command`). Settings whose name ends in `_file` point at the file that holds a secret; its mode must be `0600`.
+The core picks this machine's target from the `index.toml` index, downloads the binary and checks its sha256. Plugin names: `vikunja`, `redmine`, `zulip`, `gmail`. A plugin's settings go in the `config` table of its box in the profile `~/.config/focusdeck/profiles/<name>.toml` (`config.toml` only holds `default_profile`, `registries`, `capture_command`, `language` and `capture_words`). Settings whose name ends in `_file` point at the file that holds a secret; its mode must be `0600`.
 
 ```toml
 [[box]]

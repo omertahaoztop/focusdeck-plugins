@@ -14,7 +14,7 @@ Plugin'ler focusdeck'in `FOCUSDECK_LANG` ile ilettiği dili konuşur; doğrudan 
 focusdeck plugin install <ad>
 ```
 
-Çekirdek `index.toml` dizininden makinenin hedefini seçer, ikiliyi indirir ve sha256'sını doğrular. Plugin adları: `vikunja`, `redmine`, `zulip`, `gmail`. Plugin'in ayarları `~/.config/focusdeck/profiles/<ad>.toml` profilindeki kutunun `config` tablosuna yazılır (`config.toml` yalnız `default_profile`, `registries` ve `capture_command` tutar). Adı `_file` ile biten ayarlar gizli bilginin durduğu dosyayı gösterir, izni `0600` olmalı.
+Çekirdek `index.toml` dizininden makinenin hedefini seçer, ikiliyi indirir ve sha256'sını doğrular. Plugin adları: `vikunja`, `redmine`, `zulip`, `gmail`. Plugin'in ayarları `~/.config/focusdeck/profiles/<ad>.toml` profilindeki kutunun `config` tablosuna yazılır (`config.toml` yalnız `default_profile`, `registries`, `capture_command`, `language` ve `capture_words` tutar). Adı `_file` ile biten ayarlar gizli bilginin durduğu dosyayı gösterir, izni `0600` olmalı.
 
 ```toml
 [[box]]
