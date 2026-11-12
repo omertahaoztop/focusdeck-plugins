@@ -1,0 +1,13 @@
+[[plugin]]
+name = "redmine"
+description = "Bana atanmış açık Redmine işleri"
+version = "0.1.0"
+protocol = 1
+
+[plugin.targets.aarch64-unknown-linux-gnu]
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/redmine-v0.1.0/redmine-aarch64-unknown-linux-gnu"
+sha256 = "f13a4347f2eb6cfc0fc49e6f3ea0a8468827b9c5a8a701bb0ecbfd7384b8711c"
+
+[plugin.targets.x86_64-unknown-linux-gnu]
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/redmine-v0.1.0/redmine-x86_64-unknown-linux-gnu"
+sha256 = "47d90ab9c52b24654ecd37b25b31b4d2b076ab3319af2b047b0023eec98b965f"
