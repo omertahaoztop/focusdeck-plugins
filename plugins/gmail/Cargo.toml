@@ -1,0 +1,20 @@
+[package]
+name = "focusdeck-gmail"
+version = "0.1.0"
+description = "Yıldızlı Gmail mailleri"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+base64.workspace = true
+chrono.workspace = true
+focusdeck-protocol = { path = "../../../focusdeck/crates/focusdeck-protocol" }
+getrandom.workspace = true
+reqwest = { workspace = true, features = ["form"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+mockito.workspace = true
+tempfile.workspace = true
