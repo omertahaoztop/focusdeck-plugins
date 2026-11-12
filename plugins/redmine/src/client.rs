@@ -6,6 +6,8 @@ use reqwest::blocking::{Client as Http, Response};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde::{Deserialize, Deserializer};
 
+use crate::i18n::{msg, t, t_args};
+
 const PAGE_LIMIT: &str = "100";
 
 fn null_as_default<'de, D, T>(d: D) -> Result<T, D::Error>
@@ -46,8 +48,7 @@ pub struct Client {
 
 impl Client {
     pub fn new(base_url: &str, key: &str) -> Result<Self, String> {
-        let mut value = HeaderValue::from_str(key)
-            .map_err(|_| "Redmine: anahtar geçersiz karakter içeriyor".to_string())?;
+        let mut value = HeaderValue::from_str(key).map_err(|_| t(msg::KEY_INVALID_CHARS))?;
         value.set_sensitive(true);
         let mut headers = HeaderMap::new();
         headers.insert(HeaderName::from_static("x-redmine-api-key"), value);
@@ -56,7 +57,7 @@ impl Client {
             .user_agent(concat!("focusdeck-redmine/", env!("CARGO_PKG_VERSION")))
             .timeout(Duration::from_secs(15))
             .build()
-            .map_err(|_| "HTTP istemcisi kurulamadı".to_string())?;
+            .map_err(|_| t(msg::HTTP_CLIENT_FAILED))?;
         Ok(Self {
             http,
             base: base_url.trim_end_matches('/').to_string(),
@@ -82,7 +83,7 @@ impl Client {
     pub fn current_user(&self) -> Result<(), String> {
         let response = self.get("/users/current.json", &[])?;
         match response.status() {
-            StatusCode::UNAUTHORIZED => Err("Redmine: anahtar reddedildi".into()),
+            StatusCode::UNAUTHORIZED => Err(t(msg::KEY_REJECTED)),
             status if status.is_success() => Ok(()),
             status => Err(status_error(status)),
         }
@@ -105,7 +106,7 @@ impl Client {
             let page: Page = self
                 .get_ok("/issues.json", &query)?
                 .json()
-                .map_err(|_| "Redmine: yanıt çözülemedi".to_string())?;
+                .map_err(|_| t(msg::RESPONSE_UNREADABLE))?;
             if page.issues.is_empty() {
                 break page.total_count;
             }
@@ -116,9 +117,9 @@ impl Client {
             }
         };
         if all.len() < total {
-            return Err(format!(
-                "Redmine: liste eksik geldi ({}/{total})",
-                all.len()
+            return Err(t_args(
+                msg::LIST_INCOMPLETE,
+                &[("got", all.len().into()), ("total", total.into())],
             ));
         }
         Ok(all)
@@ -127,14 +128,17 @@ impl Client {
 
 fn transport_error(e: reqwest::Error) -> String {
     if e.is_timeout() {
-        "Redmine: zaman aşımı".into()
+        t(msg::TIMED_OUT)
     } else if e.is_connect() {
-        "Redmine: bağlantı kurulamadı".into()
+        t(msg::CONNECT_FAILED)
     } else {
-        "Redmine: istek başarısız".into()
+        t(msg::REQUEST_FAILED)
     }
 }
 
 fn status_error(status: StatusCode) -> String {
-    format!("Redmine: HTTP {}", status.as_u16())
+    t_args(
+        msg::HTTP_STATUS,
+        &[("status", status.as_u16().to_string().as_str().into())],
+    )
 }

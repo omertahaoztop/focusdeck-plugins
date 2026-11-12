@@ -60,7 +60,7 @@ fn base_mocks(server: &mut ServerGuard, views: Value) -> Vec<Mock> {
     vec![
         mock(server, "GET", "/api/v1/projects?per_page=200&page=1")
             .match_header("user-agent", Matcher::Regex("^focusdeck-vikunja/".into()))
-            .with_body(json!([{"id": 3, "title": "Başka"}, {"id": 9, "title": "Mono"}]).to_string())
+            .with_body(json!([{"id": 3, "title": "Başka"}, {"id": 9, "title": "Home"}]).to_string())
             .create(),
         mock(server, "GET", "/api/v1/projects?per_page=200&page=2")
             .with_body("[]")
@@ -87,7 +87,7 @@ fn ctx(bucket: Option<&str>) -> Ctx {
     let keyfile = keyfile_new();
     let mut plugin = Vikunja::default();
     plugin
-        .configure(config(&server, &keyfile, "Mono", bucket))
+        .configure(config(&server, &keyfile, "Home", bucket))
         .unwrap();
     Ctx {
         server,
@@ -191,7 +191,7 @@ fn configure_matches_project_case_insensitively() {
     let keyfile = keyfile_new();
     let mut plugin = Vikunja::default();
     plugin
-        .configure(config(&server, &keyfile, "mono", None))
+        .configure(config(&server, &keyfile, "home", None))
         .unwrap();
 }
 
@@ -204,7 +204,7 @@ fn configure_accepts_numeric_view_kind() {
     );
     let keyfile = keyfile_new();
     Vikunja::default()
-        .configure(config(&server, &keyfile, "Mono", None))
+        .configure(config(&server, &keyfile, "Home", None))
         .unwrap();
 }
 
@@ -214,9 +214,9 @@ fn configure_fails_without_kanban_view() {
     let _base = base_mocks(&mut server, json!([{"id": 36, "view_kind": "list"}]));
     let keyfile = keyfile_new();
     let err = Vikunja::default()
-        .configure(config(&server, &keyfile, "Mono", None))
+        .configure(config(&server, &keyfile, "Home", None))
         .unwrap_err();
-    assert_eq!(err, "Projede kanban görünümü yok: Mono");
+    assert_eq!(err, "Project has no kanban view: Home");
 }
 
 #[test]
@@ -225,9 +225,9 @@ fn configure_unknown_project() {
     let _base = base_mocks(&mut server, kanban_views());
     let keyfile = keyfile_new();
     let err = Vikunja::default()
-        .configure(config(&server, &keyfile, "Yok", None))
+        .configure(config(&server, &keyfile, "Missing", None))
         .unwrap_err();
-    assert_eq!(err, "Vikunja'da proje yok: Yok");
+    assert_eq!(err, "No such project in Vikunja: Missing");
 }
 
 #[test]
@@ -236,9 +236,9 @@ fn configure_unknown_bucket() {
     let _base = base_mocks(&mut server, kanban_views());
     let keyfile = keyfile_new();
     let err = Vikunja::default()
-        .configure(config(&server, &keyfile, "Mono", Some("Hayalet")))
+        .configure(config(&server, &keyfile, "Home", Some("Ghost")))
         .unwrap_err();
-    assert_eq!(err, "Vikunja'da sütun yok: Hayalet");
+    assert_eq!(err, "No such bucket in Vikunja: Ghost");
 }
 
 #[test]
@@ -251,18 +251,18 @@ fn configure_unauthorized_hides_token() {
         .create();
     let keyfile = keyfile_new();
     let err = Vikunja::default()
-        .configure(config(&server, &keyfile, "Mono", None))
+        .configure(config(&server, &keyfile, "Home", None))
         .unwrap_err();
-    assert_eq!(err, "Vikunja 401: token geçersiz");
+    assert_eq!(err, "Vikunja 401: invalid token");
     assert!(!err.contains(TOKEN));
 }
 
 #[test]
 fn configure_reports_missing_token_file() {
     let server = mockito::Server::new();
-    let cfg = json!({"url": server.url(), "token_file": "/nonexistent/focusdeck-token", "project": "Mono"});
+    let cfg = json!({"url": server.url(), "token_file": "/nonexistent/focusdeck-token", "project": "Home"});
     let err = Vikunja::default().configure(cfg).unwrap_err();
-    assert!(err.starts_with("Token dosyası okunamadı"), "{err}");
+    assert!(err.starts_with("Could not read token file"), "{err}");
 }
 
 #[test]
@@ -270,7 +270,7 @@ fn configure_reports_missing_setting() {
     let err = Vikunja::default()
         .configure(json!({"url": "http://x"}))
         .unwrap_err();
-    assert!(err.starts_with("Ayar hatalı"), "{err}");
+    assert!(err.starts_with("Invalid settings"), "{err}");
 }
 
 #[test]
@@ -280,7 +280,7 @@ fn unconfigured_plugin_errors() {
             view: View::Summary,
         })
         .unwrap_err();
-    assert_eq!(err, "Vikunja ayarlanmadı");
+    assert_eq!(err, "Vikunja is not configured");
 }
 
 #[test]
@@ -323,7 +323,7 @@ fn list_due_handling() {
 fn list_reads_source_from_description() {
     let mut c = ctx(None);
     let mut t = task(1, "bağlı", 1.0);
-    t["description"] = json!("<p>not</p><p>focusdeck-source: redmine:45539</p>");
+    t["description"] = json!("<p>not</p><p>focusdeck-source: redmine:12345</p>");
     view_tasks(
         &mut c.server,
         json!([{"id": 59, "title": "Yeni", "tasks": [t, task(2, "serbest", 2.0)]}]),
@@ -333,7 +333,7 @@ fn list_reads_source_from_description() {
         items[0].source,
         Some(Source {
             plugin: "redmine".into(),
-            id: "45539".into()
+            id: "12345".into()
         })
     );
     assert_eq!(items[1].source, None);
@@ -415,7 +415,7 @@ fn action_rejects_non_numeric_id_and_unknown_action() {
         .plugin
         .action(action("5", "boom", Value::Null))
         .unwrap_err();
-    assert_eq!(err, "Bilinmeyen eylem: boom");
+    assert_eq!(err, "Unknown action: boom");
 }
 
 #[test]
@@ -506,7 +506,7 @@ fn reorder_unknown_task_errors() {
         .plugin
         .action(action("42", "reorder", json!({"position": 0})))
         .unwrap_err();
-    assert_eq!(err, "Görev listede yok: 42");
+    assert_eq!(err, "Task is not in the list: 42");
 }
 
 fn label_search(c: &mut Ctx, title: &str, found: Value) -> Mock {
@@ -534,7 +534,7 @@ fn drop_creates_task_with_labels_links_and_reminder() {
     let create = mock(&mut c.server, "PUT", "/api/v1/projects/9/tasks")
         .match_body(Matcher::Json(json!({
             "title": "Ali'yi ara",
-            "description": "<p>ayrıntı</p><p><a href=\"https://redmine.example.com/issues/45539\">R45539</a></p>",
+            "description": "<p>ayrıntı</p><p><a href=\"https://redmine.example.com/issues/12345\">R12345</a></p>",
             "due_date": due,
             "reminders": [{"reminder": due}],
         })))
@@ -550,8 +550,8 @@ fn drop_creates_task_with_labels_links_and_reminder() {
     item.from = Some("ali".into());
     item.description = Some("ayrıntı".into());
     item.links = vec![Link {
-        label: "R45539".into(),
-        url: "https://redmine.example.com/issues/45539".into(),
+        label: "R12345".into(),
+        url: "https://redmine.example.com/issues/12345".into(),
     }];
     let created = c.plugin.drop_item(DropParams { item, from: None }).unwrap();
     create_label.assert();
@@ -598,14 +598,14 @@ fn drop_writes_item_source_into_description() {
     let mut c = ctx(None);
     let create = mock(&mut c.server, "PUT", "/api/v1/projects/9/tasks")
         .match_body(Matcher::PartialJson(
-            json!({"description": "<p>focusdeck-source: redmine:45539</p>"}),
+            json!({"description": "<p>focusdeck-source: redmine:12345</p>"}),
         ))
         .with_body(created_task())
         .create();
     let mut item = note("S3");
     item.source = Some(Source {
         plugin: "redmine".into(),
-        id: "45539".into(),
+        id: "12345".into(),
     });
     c.plugin.drop_item(DropParams { item, from: None }).unwrap();
     create.assert();
@@ -616,13 +616,13 @@ fn drop_uses_from_as_source_when_item_has_none() {
     let mut c = ctx(None);
     let create = mock(&mut c.server, "PUT", "/api/v1/projects/9/tasks")
         .match_body(Matcher::PartialJson(
-            json!({"description": "<p>focusdeck-source: redmine:45539</p>"}),
+            json!({"description": "<p>focusdeck-source: redmine:12345</p>"}),
         ))
         .with_body(created_task())
         .create();
     let from = Source {
         plugin: "redmine".into(),
-        id: "45539".into(),
+        id: "12345".into(),
     };
     c.plugin
         .drop_item(DropParams {
@@ -817,7 +817,7 @@ fn server_error_has_short_message_without_body() {
             view: View::Summary,
         })
         .unwrap_err();
-    assert_eq!(err, "Vikunja 500: sunucu hatası");
+    assert_eq!(err, "Vikunja 500: server error");
 }
 
 fn tasks_page(server: &mut ServerGuard, page: u32, columns: Value) -> Mock {
@@ -848,14 +848,14 @@ fn configure_finds_project_on_later_page() {
         .create()
     };
     let _p1 = page(1, json!([{"id": 3, "title": "Başka"}]));
-    let _p2 = page(2, json!([{"id": 9, "title": "Mono"}]));
+    let _p2 = page(2, json!([{"id": 9, "title": "Home"}]));
     let _p3 = page(3, json!([]));
     let _views = mock(&mut server, "GET", "/api/v1/projects/9/views")
         .with_body(kanban_views().to_string())
         .create();
     let mut plugin = Vikunja::default();
     plugin
-        .configure(config(&server, &keyfile, "Mono", None))
+        .configure(config(&server, &keyfile, "Home", None))
         .unwrap();
 }
 

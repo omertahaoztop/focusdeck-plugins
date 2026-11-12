@@ -1,11 +1,12 @@
 use chrono::{Local, NaiveDate};
+use focusdeck_i18n::Localizer;
 use focusdeck_protocol::{ActionParams, Describe, Item, ListParams, PROTOCOL_VERSION, Plugin};
 use serde::Deserialize;
 use serde_json::Value;
 
 use crate::client::{Client, Issue};
+use crate::i18n::{self, msg, t, t_args};
 
-const NOT_CONFIGURED: &str = "Redmine ayarlanmadı";
 const DUE_HOUR: u32 = 17;
 
 #[derive(Deserialize)]
@@ -37,13 +38,24 @@ impl Plugin for Redmine {
     }
 
     fn configure(&mut self, config: Value) -> Result<(), String> {
-        let cfg: Config =
-            serde_json::from_value(config).map_err(|e| format!("Ayar hatalı: {e}"))?;
-        let key = std::fs::read_to_string(&cfg.key_file)
-            .map_err(|_| format!("Redmine anahtar dosyası okunamadı: {}", cfg.key_file))?;
+        let cfg: Config = serde_json::from_value(config).map_err(|e| {
+            t_args(
+                msg::INVALID_SETTINGS,
+                &[("error", e.to_string().as_str().into())],
+            )
+        })?;
+        let key = std::fs::read_to_string(&cfg.key_file).map_err(|_| {
+            t_args(
+                msg::KEY_FILE_UNREADABLE,
+                &[("path", cfg.key_file.as_str().into())],
+            )
+        })?;
         let key = key.trim();
         if key.is_empty() {
-            return Err(format!("Redmine anahtar dosyası boş: {}", cfg.key_file));
+            return Err(t_args(
+                msg::KEY_FILE_EMPTY,
+                &[("path", cfg.key_file.as_str().into())],
+            ));
         }
         let client = Client::new(&cfg.url, key)?;
         client.current_user()?;
@@ -55,7 +67,7 @@ impl Plugin for Redmine {
     }
 
     fn list(&mut self, _p: ListParams) -> Result<Vec<Item>, String> {
-        let target = self.target.as_ref().ok_or(NOT_CONFIGURED)?;
+        let target = self.target.as_ref().ok_or_else(|| t(msg::NOT_CONFIGURED))?;
         let today = Local::now().date_naive();
         Ok(target
             .client
@@ -66,8 +78,12 @@ impl Plugin for Redmine {
     }
 
     fn action(&mut self, _p: ActionParams) -> Result<Option<Item>, String> {
-        Err("bu kutuda eylem yok".into())
+        Err(t(msg::NO_ACTIONS))
     }
+}
+
+pub fn late_subtitle(localizer: &Localizer, days: i64) -> String {
+    localizer.t_args(msg::LATE, &[("days", days.into())])
 }
 
 pub fn to_item(issue: &Issue, base: &str, today: NaiveDate) -> Item {
@@ -89,7 +105,7 @@ pub fn to_item(issue: &Issue, base: &str, today: NaiveDate) -> Item {
         .map(str::trim)
         .filter(|name| !name.is_empty());
     let mut parts: Vec<String> = priority.map(str::to_string).into_iter().collect();
-    parts.extend(late_days.map(|days| format!("{days}g gecikmiş")));
+    parts.extend(late_days.map(|days| late_subtitle(i18n::current(), days)));
     Item {
         id: issue.id.to_string(),
         title: issue.subject.clone(),

@@ -1,0 +1,15 @@
+not-configured = Redmine ayarlanmadı
+invalid-settings = Ayar hatalı: { $error }
+key-file-unreadable = Redmine anahtar dosyası okunamadı: { $path }
+key-file-empty = Redmine anahtar dosyası boş: { $path }
+key-invalid-chars = Redmine: anahtar geçersiz karakter içeriyor
+key-rejected = Redmine: anahtar reddedildi
+no-actions = bu kutuda eylem yok
+response-unreadable = Redmine: yanıt çözülemedi
+list-incomplete = Redmine: liste eksik geldi ({ $got }/{ $total })
+http-client-failed = HTTP istemcisi kurulamadı
+timed-out = Redmine: zaman aşımı
+connect-failed = Redmine: bağlantı kurulamadı
+request-failed = Redmine: istek başarısız
+http-status = Redmine: HTTP { $status }
+late = { $days }g gecikmiş

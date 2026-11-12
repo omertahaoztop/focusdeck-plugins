@@ -4,7 +4,8 @@ use std::os::unix::fs::PermissionsExt;
 use chrono::{Local, NaiveDate, TimeZone};
 use focusdeck_protocol::{ActionParams, ListParams, PROTOCOL_VERSION, Plugin, View};
 use focusdeck_redmine::client::Issue;
-use focusdeck_redmine::plugin::{Redmine, to_item};
+use focusdeck_redmine::i18n;
+use focusdeck_redmine::plugin::{Redmine, late_subtitle, to_item};
 use mockito::{Matcher, Mock, ServerGuard};
 use serde_json::{Value, json};
 use tempfile::NamedTempFile;
@@ -96,7 +97,7 @@ fn action_is_always_rejected() {
             args: Value::Null,
         })
         .unwrap_err();
-    assert_eq!(err, "bu kutuda eylem yok");
+    assert_eq!(err, "this box has no actions");
 }
 
 #[test]
@@ -132,7 +133,7 @@ fn incomplete_listing_is_an_error() {
     page(&mut server, 0, (1..=100).map(issue_json).collect(), 150);
     page(&mut server, 100, vec![], 150);
     let err = list(&mut plugin).unwrap_err();
-    assert_eq!(err, "Redmine: liste eksik geldi (100/150)");
+    assert_eq!(err, "Redmine: list came back incomplete (100/150)");
 }
 
 #[test]
@@ -142,7 +143,7 @@ fn duplicate_across_pages_counts_once() {
     page(&mut server, 0, vec![issue_json(1), issue_json(2)], 3);
     page(&mut server, 2, vec![issue_json(1)], 3);
     let err = list(&mut plugin).unwrap_err();
-    assert_eq!(err, "Redmine: liste eksik geldi (2/3)");
+    assert_eq!(err, "Redmine: list came back incomplete (2/3)");
 }
 
 #[test]
@@ -170,7 +171,7 @@ fn to_item_marks_overdue_with_days() {
         .with_ymd_and_hms(2026, 11, 8, 17, 0, 0)
         .earliest()
         .unwrap();
-    assert_eq!(item.subtitle.as_deref(), Some("Ö1 · 4g gecikmiş"));
+    assert_eq!(item.subtitle.as_deref(), Some("Ö1 · 4d overdue"));
     assert!(item.overdue);
     assert_eq!(item.due, Some(expected.fixed_offset()));
     assert_eq!(item.id, "42");
@@ -216,7 +217,7 @@ fn rejected_key_fails_configure() {
     let err = Redmine::default()
         .configure(config(&server, &file))
         .unwrap_err();
-    assert_eq!(err, "Redmine: anahtar reddedildi");
+    assert_eq!(err, "Redmine: key rejected");
     assert!(!err.contains(KEY));
 }
 
@@ -229,7 +230,7 @@ fn empty_key_file_fails_configure() {
         .unwrap_err();
     assert_eq!(
         err,
-        format!("Redmine anahtar dosyası boş: {}", file.path().display())
+        format!("Redmine key file is empty: {}", file.path().display())
     );
 }
 
@@ -240,7 +241,7 @@ fn missing_key_file_fails_configure() {
     let err = Redmine::default().configure(cfg).unwrap_err();
     assert_eq!(
         err,
-        "Redmine anahtar dosyası okunamadı: /nonexistent/focusdeck-key"
+        "Redmine key file could not be read: /nonexistent/focusdeck-key"
     );
 }
 
@@ -249,11 +250,20 @@ fn missing_setting_fails_configure() {
     let err = Redmine::default()
         .configure(json!({"url": "http://x"}))
         .unwrap_err();
-    assert!(err.starts_with("Ayar hatalı"), "{err}");
+    assert!(err.starts_with("Invalid settings"), "{err}");
 }
 
 #[test]
 fn unconfigured_plugin_errors() {
     let err = list(&mut Redmine::default()).unwrap_err();
-    assert_eq!(err, "Redmine ayarlanmadı");
+    assert_eq!(err, "Redmine is not configured");
+}
+
+#[test]
+fn late_subtitle_by_language() {
+    assert_eq!(
+        late_subtitle(&i18n::localizer(Some("tr")), 3),
+        "3g gecikmiş"
+    );
+    assert_eq!(late_subtitle(&i18n::localizer(Some("en")), 3), "3d overdue");
 }

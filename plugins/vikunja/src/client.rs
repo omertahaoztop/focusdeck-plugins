@@ -7,6 +7,8 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer};
 use serde_json::{Value, json};
 
+use crate::i18n::{msg, t, t_args};
+
 const KANBAN_KIND: u64 = 3;
 const PER_PAGE: usize = 200;
 const MAX_PAGES: usize = 1000;
@@ -98,7 +100,7 @@ pub struct Client {
 impl Client {
     pub fn new(base_url: &str, token: &str) -> Result<Self, String> {
         let mut auth = HeaderValue::from_str(&format!("Bearer {token}"))
-            .map_err(|_| "Token geçersiz karakter içeriyor".to_string())?;
+            .map_err(|_| t(msg::TOKEN_INVALID_CHARS))?;
         auth.set_sensitive(true);
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, auth);
@@ -107,7 +109,7 @@ impl Client {
             .user_agent(concat!("focusdeck-vikunja/", env!("CARGO_PKG_VERSION")))
             .timeout(Duration::from_secs(10))
             .build()
-            .map_err(|_| "HTTP istemcisi kurulamadı".to_string())?;
+            .map_err(|_| t(msg::HTTP_CLIENT_FAILED))?;
         Ok(Self {
             http,
             api: format!("{}/api/v1", base_url.trim_end_matches('/')),
@@ -124,11 +126,11 @@ impl Client {
         if body.trim().is_empty() {
             return Ok(Value::Null);
         }
-        serde_json::from_str(&body).map_err(|_| "Vikunja: yanıt çözülemedi".to_string())
+        serde_json::from_str(&body).map_err(|_| t(msg::RESPONSE_UNREADABLE))
     }
 
     fn typed<T: DeserializeOwned>(value: Value) -> Result<T, String> {
-        serde_json::from_value(value).map_err(|_| "Vikunja: yanıt çözülemedi".to_string())
+        serde_json::from_value(value).map_err(|_| t(msg::RESPONSE_UNREADABLE))
     }
 
     fn get<T: DeserializeOwned>(&self, path: &str, query: &[(&str, &str)]) -> Result<T, String> {
@@ -284,23 +286,30 @@ impl Client {
 
 fn transport_error(e: reqwest::Error) -> String {
     if e.is_timeout() {
-        "Vikunja: zaman aşımı".into()
+        t(msg::TIMED_OUT)
     } else if e.is_connect() {
-        "Vikunja: bağlantı kurulamadı".into()
+        t(msg::CONNECT_FAILED)
     } else {
-        "Vikunja: istek başarısız".into()
+        t(msg::REQUEST_FAILED)
     }
 }
 
 fn status_error(status: StatusCode) -> String {
     let reason = match status.as_u16() {
-        400 => "geçersiz istek",
-        401 => "token geçersiz",
-        403 => "yetki yok",
-        404 => "bulunamadı",
-        429 => "çok fazla istek",
-        500..=599 => "sunucu hatası",
-        _ => "beklenmeyen yanıt",
+        400 => msg::HTTP_BAD_REQUEST,
+        401 => msg::HTTP_UNAUTHORIZED,
+        403 => msg::HTTP_FORBIDDEN,
+        404 => msg::HTTP_NOT_FOUND,
+        429 => msg::HTTP_RATE_LIMITED,
+        500..=599 => msg::HTTP_SERVER_ERROR,
+        _ => msg::HTTP_UNEXPECTED,
     };
-    format!("Vikunja {}: {reason}", status.as_u16())
+    let code = status.as_u16().to_string();
+    t_args(
+        msg::HTTP_STATUS,
+        &[
+            ("status", code.as_str().into()),
+            ("reason", t(reason).as_str().into()),
+        ],
+    )
 }

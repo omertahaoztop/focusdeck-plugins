@@ -1,0 +1,15 @@
+not-configured = Redmine is not configured
+invalid-settings = Invalid settings: { $error }
+key-file-unreadable = Redmine key file could not be read: { $path }
+key-file-empty = Redmine key file is empty: { $path }
+key-invalid-chars = Redmine: the key contains invalid characters
+key-rejected = Redmine: key rejected
+no-actions = this box has no actions
+response-unreadable = Redmine: could not parse the response
+list-incomplete = Redmine: list came back incomplete ({ $got }/{ $total })
+http-client-failed = Could not set up the HTTP client
+timed-out = Redmine: timed out
+connect-failed = Redmine: could not connect
+request-failed = Redmine: request failed
+http-status = Redmine: HTTP { $status }
+late = { $days }d overdue

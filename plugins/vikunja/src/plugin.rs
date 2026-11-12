@@ -7,11 +7,11 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::client::{Client, Label, Task};
+use crate::i18n::{msg, t, t_args};
 
 const SOURCE_MARKER: &str = "focusdeck-source: ";
 const FROM_LABEL_PREFIX: &str = "kimden:";
 const POSITION_STEP: f64 = 65536.0;
-const NOT_CONFIGURED: &str = "Vikunja ayarlanmadı";
 
 #[derive(Deserialize)]
 struct Config {
@@ -119,16 +119,16 @@ impl Target {
 
     fn adopt(&self, id: u64) -> Result<Item, String> {
         let mut raw = self.client.get_task_raw(id)?;
-        let task: Task = serde_json::from_value(raw.clone())
-            .map_err(|_| "Vikunja: yanıt çözülemedi".to_string())?;
+        let task: Task =
+            serde_json::from_value(raw.clone()).map_err(|_| t(msg::RESPONSE_UNREADABLE))?;
         let bucket = self.bucket.or(self.default_bucket);
         if task.project_id == self.project {
-            let bucket = bucket.ok_or("Projede varsayılan sütun yok")?;
+            let bucket = bucket.ok_or_else(|| t(msg::NO_DEFAULT_BUCKET))?;
             self.move_to(id, bucket)?;
             return Ok(to_item(&task, &self.base, None));
         }
         raw.as_object_mut()
-            .ok_or("Vikunja: yanıt çözülemedi")?
+            .ok_or_else(|| t(msg::RESPONSE_UNREADABLE))?
             .insert("project_id".into(), json!(self.project));
         let moved = self.client.update_task(id, &raw)?;
         if let Some(bucket) = self.bucket {
@@ -140,9 +140,7 @@ impl Target {
 
 impl Vikunja {
     fn target(&self) -> Result<&Target, String> {
-        self.target
-            .as_ref()
-            .ok_or_else(|| NOT_CONFIGURED.to_string())
+        self.target.as_ref().ok_or_else(|| t(msg::NOT_CONFIGURED))
     }
 
     fn refresh(&mut self) -> Result<Vec<Item>, String> {
@@ -160,12 +158,15 @@ impl Vikunja {
         let wanted = args
             .get("position")
             .and_then(Value::as_u64)
-            .ok_or("Eylem için position gerekli")?;
+            .ok_or_else(|| t(msg::POSITION_REQUIRED))?;
         if !self.last.iter().any(|(known, _)| *known == id) {
             self.refresh()?;
         }
         if !self.last.iter().any(|(known, _)| *known == id) {
-            return Err(format!("Görev listede yok: {id}"));
+            return Err(t_args(
+                msg::TASK_NOT_LISTED,
+                &[("id", id.to_string().as_str().into())],
+            ));
         }
         let others: Vec<f64> = self
             .last
@@ -199,13 +200,24 @@ impl Plugin for Vikunja {
     }
 
     fn configure(&mut self, config: Value) -> Result<(), String> {
-        let cfg: Config =
-            serde_json::from_value(config).map_err(|e| format!("Ayar hatalı: {e}"))?;
-        let token = std::fs::read_to_string(&cfg.token_file)
-            .map_err(|_| format!("Token dosyası okunamadı: {}", cfg.token_file))?;
+        let cfg: Config = serde_json::from_value(config).map_err(|e| {
+            t_args(
+                msg::INVALID_SETTINGS,
+                &[("error", e.to_string().as_str().into())],
+            )
+        })?;
+        let token = std::fs::read_to_string(&cfg.token_file).map_err(|_| {
+            t_args(
+                msg::TOKEN_UNREADABLE,
+                &[("path", cfg.token_file.as_str().into())],
+            )
+        })?;
         let token = token.trim();
         if token.is_empty() {
-            return Err(format!("Token dosyası boş: {}", cfg.token_file));
+            return Err(t_args(
+                msg::TOKEN_EMPTY,
+                &[("path", cfg.token_file.as_str().into())],
+            ));
         }
         let client = Client::new(&cfg.url, token)?;
         let wanted = cfg.project.to_lowercase();
@@ -213,12 +225,22 @@ impl Plugin for Vikunja {
             .projects()?
             .into_iter()
             .find(|p| p.title.to_lowercase() == wanted)
-            .ok_or_else(|| format!("Vikunja'da proje yok: {}", cfg.project))?;
+            .ok_or_else(|| {
+                t_args(
+                    msg::PROJECT_MISSING,
+                    &[("project", cfg.project.as_str().into())],
+                )
+            })?;
         let view = client
             .views(project.id)?
             .into_iter()
             .find(|v| v.kanban)
-            .ok_or_else(|| format!("Projede kanban görünümü yok: {}", cfg.project))?;
+            .ok_or_else(|| {
+                t_args(
+                    msg::NO_KANBAN_VIEW,
+                    &[("project", cfg.project.as_str().into())],
+                )
+            })?;
         let bucket = match cfg.bucket.as_deref() {
             Some(title) => Some(find_bucket(&client, project.id, view.id, title)?),
             None => None,
@@ -245,9 +267,7 @@ impl Plugin for Vikunja {
         match p.action.as_str() {
             "done" => {
                 let target = self.target()?;
-                let done = target
-                    .done_bucket
-                    .ok_or("Projede bitti sütunu tanımlı değil")?;
+                let done = target.done_bucket.ok_or_else(|| t(msg::NO_DONE_BUCKET))?;
                 target.move_to(id, done)?;
             }
             "delete" => self.target()?.client.delete_task(id)?,
@@ -259,7 +279,7 @@ impl Plugin for Vikunja {
                 }
                 None => self.reorder(id, &p.args)?,
             },
-            other => return Err(format!("Bilinmeyen eylem: {other}")),
+            other => return Err(t_args(msg::UNKNOWN_ACTION, &[("action", other.into())])),
         }
         Ok(None)
     }
@@ -298,12 +318,12 @@ fn find_bucket(client: &Client, project: u64, view: u64, title: &str) -> Result<
         .into_iter()
         .find(|b| b.title.to_lowercase() == wanted)
         .map(|b| b.id)
-        .ok_or_else(|| format!("Vikunja'da sütun yok: {title}"))
+        .ok_or_else(|| t_args(msg::BUCKET_MISSING, &[("title", title.into())]))
 }
 
 fn parse_id(raw: &str) -> Result<u64, String> {
     raw.parse()
-        .map_err(|_| format!("Geçersiz görev kimliği: {raw}"))
+        .map_err(|_| t_args(msg::INVALID_TASK_ID, &[("id", raw.into())]))
 }
 
 fn place_between(others: &[f64], wanted: usize) -> f64 {
