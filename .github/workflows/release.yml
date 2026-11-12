@@ -30,8 +30,8 @@ jobs:
           set -euo pipefail
           name="${TAG%-v*}"
           version="${TAG##*-v}"
-          [[ "$name" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || { echo "Etiketteki plugin adı geçersiz" >&2; exit 1; }
-          [[ "$version" =~ ^[0-9A-Za-z.+-]+$ ]] || { echo "Etiketteki sürüm geçersiz" >&2; exit 1; }
+          [[ "$name" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || { echo "Invalid plugin name in tag" >&2; exit 1; }
+          [[ "$version" =~ ^[0-9A-Za-z.+-]+$ ]] || { echo "Invalid version in tag" >&2; exit 1; }
           package=$(cargo metadata --format-version 1 --no-deps \
             | jq -r --arg pkg "focusdeck-$name" '.packages[] | select(.name == $pkg) | .version')
           [ -n "$package" ] || { echo "focusdeck-$name paketi yok" >&2; exit 1; }
@@ -99,7 +99,7 @@ jobs:
           version="${TAG##*-v}"
           description=$(cd "$GITHUB_WORKSPACE" && env -u GH_TOKEN cargo metadata --format-version 1 --no-deps \
             | jq -r --arg pkg "focusdeck-$name" '.packages[] | select(.name == $pkg) | .description')
-          [ -n "$description" ] || { echo "focusdeck-$name açıklaması yok" >&2; exit 1; }
+          [ -n "$description" ] || { echo "focusdeck-$name has no description" >&2; exit 1; }
           args=()
           for triple in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
             sum=$(cut -d' ' -f1 "$GITHUB_WORKSPACE/dist/$name-$triple.sha256")
@@ -121,15 +121,15 @@ jobs:
               --name "$name" --description "$description" --version "$version" "${args[@]}"
             safe_git add index.toml
             if safe_git diff --cached --quiet; then
-              echo "Dizin zaten güncel"
+              echo "Index already up to date"
               exit 0
             fi
             safe_git commit -m "Update index for $TAG"
             if safe_git push origin HEAD:main; then
               exit 0
             fi
-            echo "Gönderim reddedildi, yeniden deneniyor ($attempt/5)" >&2
+            echo "Push rejected, retrying ($attempt/5)" >&2
             sleep "$((attempt * 3))"
           done
-          echo "Dizin 5 denemede güncellenemedi" >&2
+          echo "Could not update the index after 5 attempts" >&2
           exit 1
