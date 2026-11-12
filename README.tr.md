@@ -94,7 +94,7 @@ Her plugin kendi etiketiyle çıkar. Önce `plugins/<ad>/Cargo.toml` içindeki s
 git tag <ad>-v<sürüm> && git push origin <ad>-v<sürüm>
 ```
 
-Etiket `<ad>-v<sürüm>` biçiminde olmalı ve paket sürümüyle uyuşmalı. İş akışı iki hedef için ikili derler, GitHub sürümü açar ve `index.toml` dosyasını günceller. Etiketleri tek tek göndermek şart değil, birkaçını birden göndermek de olur.
+Etiket `<ad>-v<sürüm>` biçiminde olmalı ve paket sürümüyle uyuşmalı. İş akışı iki hedef için ikili derler, GitHub sürümü açar ve `index.toml` dosyasını günceller. Tek push'ta en fazla üç etiket gönder: GitHub, üçten fazla etiket bir arada gönderilince hiçbir iş akışını başlatmaz.
 
 ## Yerel deneme
 

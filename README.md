@@ -94,7 +94,7 @@ Each plugin is released with its own tag. First bump the version in `plugins/<na
 git tag <name>-v<version> && git push origin <name>-v<version>
 ```
 
-The tag must look like `<name>-v<version>` and match the package version. The workflow builds binaries for two targets, opens a GitHub release and updates `index.toml`. Tags don't have to be pushed one by one; pushing several at once works too.
+The tag must look like `<name>-v<version>` and match the package version. The workflow builds binaries for two targets, opens a GitHub release and updates `index.toml`. Push at most three tags at once: when more than three tags arrive in one push, GitHub starts no workflow at all.
 
 ## Trying it locally
 
