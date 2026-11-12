@@ -14,7 +14,7 @@ Plugin'ler focusdeck'in `FOCUSDECK_LANG` ile ilettiği dili konuşur; doğrudan 
 focusdeck plugin install <ad>
 ```
 
-Çekirdek `index.toml` dizininden makinenin hedefini seçer, ikiliyi indirir ve sha256'sını doğrular. Plugin adları: `vikunja`, `redmine`, `zulip`, `gmail`. Plugin'in ayarları `~/.config/focusdeck/profiles/<ad>.toml` profilindeki kutunun `config` tablosuna yazılır (`config.toml` yalnız `default_profile`, `registries`, `capture_command`, `language` ve `capture_words` tutar). Adı `_file` ile biten ayarlar gizli bilginin durduğu dosyayı gösterir, izni `0600` olmalı.
+Çekirdek `index.toml` dizininden makinenin hedefini seçer, ikiliyi indirir ve sha256'sını doğrular. Plugin adları: `vikunja`, `redmine`, `zulip`, `whatsapp`, `gmail`. Plugin'in ayarları `~/.config/focusdeck/profiles/<ad>.toml` profilindeki kutunun `config` tablosuna yazılır (`config.toml` yalnız `default_profile`, `registries`, `capture_command`, `language` ve `capture_words` tutar). Adı `_file` ile biten ayarlar gizli bilginin durduğu dosyayı gösterir, izni `0600` olmalı.
 
 ```toml
 [[box]]
@@ -74,6 +74,30 @@ Profil ayarları:
 | `url` | Zulip adresi, örneğin `https://zulip.example.com` |
 | `email` | Bot ya da kullanıcının e-posta adresi |
 | `key_file` | API anahtarının durduğu dosya, izni `0600` olmalı |
+
+## whatsapp
+
+Tek bir WhatsApp sohbetinin mesajlarını bir [GOWA](https://github.com/aldinokemal/go-whatsapp-web-multidevice) REST sunucusundan listeler; "kendime yaz" sohbeti için düşünüldü. Salt okunur: plugin yalnız `GET /chat/<jid>/messages` isteği atar, WhatsApp'a hiçbir şey yazmaz. `done` eylemi mesajı kutudan gizler; gizlenen kimlikler focusdeck durum dizinindeki (`FOCUSDECK_STATE_DIR`, sonra mutlak bir `XDG_STATE_HOME`, sonra `~/.local/state`; son ikisinin sonuna `/focusdeck` eklenir) `whatsapp-hidden-<jid>.json` dosyasında durur, izni `0600`. Arama kayıtları listelenmez. Eksik gelen liste hatadır; artık dönmeyen kimlikler gizli dosyasından yalnız `since` yokken ve liste tam geldiğinde silinir. Aralıkta 2.000'den fazla mesaj olan sohbet hatadır; `since` aralığı daraltır. Sunucu bilinmeyen sohbeti bildirmez, bu yüzden yanlış yazılmış `jid` boş kutu verir.
+
+Profil ayarları:
+
+| Anahtar | Anlam |
+|---|---|
+| `url` | GOWA adresi, örneğin `https://gowa.example.com` |
+| `user` | GOWA Basic Auth kullanıcı adı |
+| `key_file` | GOWA parolasının durduğu dosya, izni `0600` olmalı |
+| `jid` | Kendi sohbetinin JID'i, örneğin `15550001111@s.whatsapp.net`; grup JID'leri (`@g.us`) reddedilir |
+| `since` | İsteğe bağlı, `YYYY-AA-GG`; bu günden eski mesajlar listelenmez |
+
+```toml
+[[box]]
+id = "whatsapp"
+title = "WhatsApp"
+plugin = "whatsapp"
+row = 0
+col = 1
+config = { url = "https://gowa.example.com", user = "focusdeck", key_file = "~/.config/focusdeck/secrets/gowa.key", jid = "15550001111@s.whatsapp.net", since = "2026-11-01" }
+```
 
 ## gmail
 

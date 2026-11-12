@@ -14,7 +14,7 @@ Plugins speak the language focusdeck passes in `FOCUSDECK_LANG`; run directly th
 focusdeck plugin install <name>
 ```
 
-The core picks this machine's target from the `index.toml` index, downloads the binary and checks its sha256. Plugin names: `vikunja`, `redmine`, `zulip`, `gmail`. A plugin's settings go in the `config` table of its box in the profile `~/.config/focusdeck/profiles/<name>.toml` (`config.toml` only holds `default_profile`, `registries`, `capture_command`, `language` and `capture_words`). Settings whose name ends in `_file` point at the file that holds a secret; its mode must be `0600`.
+The core picks this machine's target from the `index.toml` index, downloads the binary and checks its sha256. Plugin names: `vikunja`, `redmine`, `zulip`, `whatsapp`, `gmail`. A plugin's settings go in the `config` table of its box in the profile `~/.config/focusdeck/profiles/<name>.toml` (`config.toml` only holds `default_profile`, `registries`, `capture_command`, `language` and `capture_words`). Settings whose name ends in `_file` point at the file that holds a secret; its mode must be `0600`.
 
 ```toml
 [[box]]
@@ -74,6 +74,30 @@ Profile settings:
 | `url` | Zulip address, for example `https://zulip.example.com` |
 | `email` | Email address of the bot or user |
 | `key_file` | File holding the API key, mode must be `0600` |
+
+## whatsapp
+
+Lists the messages of one WhatsApp chat, meant for the "message yourself" chat, from a [GOWA](https://github.com/aldinokemal/go-whatsapp-web-multidevice) REST server. Read-only: the plugin only sends `GET /chat/<jid>/messages` and never writes to WhatsApp. The `done` action hides a message from the box; the hidden ids live in `whatsapp-hidden-<jid>.json` in the focusdeck state directory (`FOCUSDECK_STATE_DIR`, then an absolute `XDG_STATE_HOME`, then `~/.local/state`, with `/focusdeck` appended to the last two), mode `0600`. Call logs are not listed. A listing that comes back incomplete is an error, and ids that no longer come back are dropped from the hidden file only after a complete listing without `since`. A chat with more than 2,000 messages in range is an error; `since` narrows the range. The server does not report unknown chats, so a mistyped `jid` gives an empty box.
+
+Profile settings:
+
+| Key | Meaning |
+|---|---|
+| `url` | GOWA address, for example `https://gowa.example.com` |
+| `user` | GOWA Basic Auth user name |
+| `key_file` | File holding the GOWA password, mode must be `0600` |
+| `jid` | JID of your own chat, for example `15550001111@s.whatsapp.net`; group JIDs (`@g.us`) are rejected |
+| `since` | Optional, `YYYY-MM-DD`; older messages are not listed |
+
+```toml
+[[box]]
+id = "whatsapp"
+title = "WhatsApp"
+plugin = "whatsapp"
+row = 0
+col = 1
+config = { url = "https://gowa.example.com", user = "focusdeck", key_file = "~/.config/focusdeck/secrets/gowa.key", jid = "15550001111@s.whatsapp.net", since = "2026-11-01" }
+```
 
 ## gmail
 
