@@ -10,7 +10,19 @@ Plugin'ler kullanıcının yetkisiyle çalışır, kum havuzu yoktur. Yalnız g�
 focusdeck plugin install <ad>
 ```
 
-Çekirdek `index.toml` dizininden makinenin hedefini seçer, ikiliyi indirir ve sha256'sını doğrular. Plugin adları: `vikunja`, `redmine`, `zulip`, `gmail`. Profil ayarları çekirdeğin `~/.config/focusdeck/config.toml` dosyasında durur. Adı `_file` ile biten ayarlar gizli bilginin durduğu dosyayı gösterir, izni `0600` olmalı.
+Çekirdek `index.toml` dizininden makinenin hedefini seçer, ikiliyi indirir ve sha256'sını doğrular. Plugin adları: `vikunja`, `redmine`, `zulip`, `gmail`. Plugin'in ayarları `~/.config/focusdeck/profiles/<ad>.toml` profilindeki kutunun `config` tablosuna yazılır (`config.toml` yalnız `default_profile`, `registries` ve `capture_command` tutar). Adı `_file` ile biten ayarlar gizli bilginin durduğu dosyayı gösterir, izni `0600` olmalı.
+
+```toml
+[[box]]
+id = "redmine"
+title = "Redmine planım"
+plugin = "redmine"
+row = 0
+col = 0
+config = { url = "https://redmine.example.com", key_file = "~/.config/focusdeck/secrets/redmine" }
+```
+
+Aşağıdaki tablolardaki anahtarlar bu `config` tablosuna girer.
 
 ## vikunja
 
@@ -65,8 +77,10 @@ Profil ayarları:
 Token'ı bir kez üretmek için:
 
 ```
-focusdeck-gmail login --client-file <yol> --token-file <yol> [--hint <e-posta>]
+~/.local/share/focusdeck/plugins/gmail login --client-file <yol> --token-file <yol> [--hint <e-posta>]
 ```
+
+`focusdeck plugin install gmail` ikiliyi bu yola `gmail` adıyla koyar. Kaynaktan derlediysen aynı komut `cargo run -p focusdeck-gmail -- login ...` ya da derlenen `focusdeck-gmail login ...` olur. Oturum düşerse plugin'in hata metni `focusdeck-gmail login` der, bu ikilinin kaynaktaki adıdır; kurulu ikili için yukarıdaki yolu kullan.
 
 Komut tarayıcıda açman için bir adres basar, onaydan sonra token'ı `--token-file` yoluna `0600` izinle yazar.
 
