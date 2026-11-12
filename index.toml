@@ -41,6 +41,20 @@ url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/viku
 sha256 = "09ccb8c45ef89a8a48f57ad6935e5dad7a066b63c8b3181bba00c01d6c5d7d6a"
 
 [[plugin]]
+name = "whatsapp"
+description = "Messages I sent to myself on WhatsApp"
+version = "0.1.0"
+protocol = 1
+
+[plugin.targets.aarch64-unknown-linux-gnu]
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/whatsapp-v0.1.0/whatsapp-aarch64-unknown-linux-gnu"
+sha256 = "29afd87d6da9a584620d48dc8fbcbff631fa8f775de2e62381a822f9eb7938c4"
+
+[plugin.targets.x86_64-unknown-linux-gnu]
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/whatsapp-v0.1.0/whatsapp-x86_64-unknown-linux-gnu"
+sha256 = "7f54433170c56b32bff0721d76b9f381939270da5792243e871d7eb87fe7f519"
+
+[[plugin]]
 name = "zulip"
 description = "Starred Zulip messages"
 version = "0.2.0"
