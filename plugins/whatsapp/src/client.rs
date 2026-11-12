@@ -3,8 +3,10 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use focusdeck_plugin_common::{StatusReason, Transport, http_client, null_as_default};
+use reqwest::Url;
 use reqwest::blocking::{Client as Http, RequestBuilder, Response};
 use serde::Deserialize;
+use serde_json::json;
 
 use crate::i18n::{msg, t, t_args};
 
@@ -47,7 +49,9 @@ struct Page {
 
 pub struct Client {
     http: Http,
+    base: Url,
     endpoint: String,
+    jid: String,
     user: String,
     password: String,
     since: Option<DateTime<Utc>>,
@@ -70,15 +74,13 @@ impl Client {
         .map_err(|_| t(msg::HTTP_CLIENT_FAILED))?;
         Ok(Self {
             http,
+            base: Url::parse(base).map_err(|_| t(msg::URL_INVALID))?,
             endpoint: format!("{base}/chat/{}/messages", jid.replace('@', "%40")),
+            jid: jid.to_string(),
             user: user.to_string(),
             password: password.to_string(),
             since,
         })
-    }
-
-    pub fn since(&self) -> Option<DateTime<Utc>> {
-        self.since
     }
 
     fn fetch(&self, limit: usize, offset: usize) -> Result<Results, String> {
@@ -109,7 +111,22 @@ impl Client {
         self.fetch(1, 0).map(drop)
     }
 
-    // an incomplete walk is an error: the caller prunes its hidden list from what comes back
+    // delete-for-me rather than revoke, which would leave a "message deleted" stub in the chat
+    pub fn delete(&self, id: &str) -> Result<(), String> {
+        // the url crate drops "." and ".." segments, which would post to another path
+        if matches!(id, "" | "." | "..") {
+            return Err(t(msg::MESSAGE_ID_INVALID));
+        }
+        let mut url = self.base.clone();
+        url.path_segments_mut()
+            .map_err(|()| t(msg::URL_INVALID))?
+            .pop_if_empty()
+            .extend(["message", id, "delete"]);
+        let request = self.http.post(url).json(&json!({"phone": self.jid}));
+        self.send(request).map(drop)
+    }
+
+    // an incomplete walk is an error so a short list never passes for the whole chat
     pub fn messages(&self) -> Result<Vec<Message>, String> {
         let mut all: Vec<Message> = Vec::new();
         let mut seen = HashSet::new();

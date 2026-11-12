@@ -77,7 +77,7 @@ Profile settings:
 
 ## whatsapp
 
-Lists the messages of one WhatsApp chat, meant for the "message yourself" chat, from a [GOWA](https://github.com/aldinokemal/go-whatsapp-web-multidevice) REST server. Read-only: the plugin only sends `GET /chat/<jid>/messages` and never writes to WhatsApp. The `done` action hides a message from the box; the hidden ids live in `whatsapp-hidden-<jid>.json` in the focusdeck state directory (`FOCUSDECK_STATE_DIR`, then an absolute `XDG_STATE_HOME`, then `~/.local/state`, with `/focusdeck` appended to the last two), mode `0600`. Call logs are not listed. A listing that comes back incomplete is an error, and ids that no longer come back are dropped from the hidden file only after a complete listing without `since`. A chat with more than 2,000 messages in range is an error; `since` narrows the range. The server does not report unknown chats, so a mistyped `jid` gives an empty box.
+Lists the messages of one WhatsApp chat, meant for the "message yourself" chat, from a [GOWA](https://github.com/aldinokemal/go-whatsapp-web-multidevice) REST server. The plugin sends two requests: `GET /chat/<jid>/messages` to list and `POST /message/<id>/delete` for the `done` action, so a proxy in front of GOWA only needs to pass those two. `done` asks GOWA to delete the message for you (WhatsApp's "delete for me") and GOWA drops it from its own store. This cannot be undone. Call logs are not listed. A listing that comes back incomplete is an error. A chat with more than 2,000 messages in range is an error; `since` narrows the range. The server does not report unknown chats, so a mistyped `jid` gives an empty box.
 
 Profile settings:
 
