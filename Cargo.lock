@@ -252,6 +252,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "focusdeck-redmine"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "focusdeck-protocol",
+ "mockito",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "focusdeck-vikunja"
 version = "0.1.0"
 dependencies = [
