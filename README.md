@@ -1,99 +1,101 @@
 # focusdeck-plugins
 
-focusdeck için plugin'ler. Her plugin ayrı bir süreçtir ve çekirdekle satır başına JSON ile konuşur.
+**English** · [Türkçe](README.tr.md)
 
-Plugin'ler kullanıcının yetkisiyle çalışır, kum havuzu yoktur. Yalnız güvendiğin dizinlerden kur.
+Plugins for [focusdeck](https://github.com/omertahaoztop/focusdeck). Each plugin is a separate process that talks to the core with one JSON message per line.
 
-## Kurulum
+Plugins run with your user's permissions; there is no sandbox. Only install from indexes you trust.
+
+## Install
 
 ```
-focusdeck plugin install <ad>
+focusdeck plugin install <name>
 ```
 
-Çekirdek `index.toml` dizininden makinenin hedefini seçer, ikiliyi indirir ve sha256'sını doğrular. Plugin adları: `vikunja`, `redmine`, `zulip`, `gmail`. Plugin'in ayarları `~/.config/focusdeck/profiles/<ad>.toml` profilindeki kutunun `config` tablosuna yazılır (`config.toml` yalnız `default_profile`, `registries` ve `capture_command` tutar). Adı `_file` ile biten ayarlar gizli bilginin durduğu dosyayı gösterir, izni `0600` olmalı.
+The core picks this machine's target from the `index.toml` index, downloads the binary and checks its sha256. Plugin names: `vikunja`, `redmine`, `zulip`, `gmail`. A plugin's settings go in the `config` table of its box in the profile `~/.config/focusdeck/profiles/<name>.toml` (`config.toml` only holds `default_profile`, `registries` and `capture_command`). Settings whose name ends in `_file` point at the file that holds a secret; its mode must be `0600`.
 
 ```toml
 [[box]]
 id = "redmine"
-title = "Redmine planım"
+title = "Redmine plan"
 plugin = "redmine"
 row = 0
 col = 0
 config = { url = "https://redmine.example.com", key_file = "~/.config/focusdeck/secrets/redmine" }
 ```
 
-Aşağıdaki tablolardaki anahtarlar bu `config` tablosuna girer.
+The keys in the tables below go in this `config` table.
 
 ## vikunja
 
-Vikunja projesindeki açık görevleri listeler, tamamlar, siler, sütun ya da sıra değiştirir, bırakılan notlardan görev açar.
+Lists the open tasks of a Vikunja project; marks them done, deletes them, moves them between buckets or reorders them, and creates tasks from dropped notes.
 
-Profil ayarları:
+Profile settings:
 
-| Anahtar | Anlam |
+| Key | Meaning |
 |---|---|
-| `url` | Vikunja adresi, örneğin `https://vikunja.example` (`/api/v1` eklenir) |
-| `token_file` | API token'ının durduğu dosya, izni `0600` olmalı |
-| `project` | Proje başlığı |
-| `bucket` | İsteğe bağlı sütun başlığı, verilirse yalnız o sütun listelenir |
+| `url` | Vikunja address, for example `https://vikunja.example.com` (`/api/v1` is appended) |
+| `token_file` | File holding the API token, mode must be `0600` |
+| `project` | Project title |
+| `bucket` | Optional bucket title; if given, only that bucket is listed |
 
-Gelen notlarda `from` `kimden:<ad>` etiketine, `labels` etiketlere, `links` açıklamadaki bağ paragrafına döner. Başka kutudan gelen öğenin kaynağı açıklamaya `focusdeck-source: <plugin>:<id>` satırı olarak yazılır.
+In incoming notes, `from` becomes a `kimden:<name>` label, `labels` become labels and `links` become a links paragraph in the description. For an item coming from another box, its source is written to the description as a `focusdeck-source: <plugin>:<id>` line.
 
 ## redmine
 
-Bana atanmış açık Redmine işlerini listeler. Eylem yoktur.
+Lists the open Redmine issues assigned to me. No actions.
 
-Profil ayarları:
+Profile settings:
 
-| Anahtar | Anlam |
+| Key | Meaning |
 |---|---|
-| `url` | Redmine adresi, örneğin `https://redmine.example.com` |
-| `key_file` | API anahtarının durduğu dosya, izni `0600` olmalı |
+| `url` | Redmine address, for example `https://redmine.example.com` |
+| `key_file` | File holding the API key, mode must be `0600` |
 
 ## zulip
 
-Yıldızlı mesajları listeler, `unstar` eylemiyle yıldızı kaldırır.
+Lists starred messages; the `unstar` action removes the star.
 
-Profil ayarları:
+Profile settings:
 
-| Anahtar | Anlam |
+| Key | Meaning |
 |---|---|
-| `url` | Zulip adresi, örneğin `https://zulip.example.com` |
-| `email` | Bot ya da kullanıcının e-posta adresi |
-| `key_file` | API anahtarının durduğu dosya, izni `0600` olmalı |
+| `url` | Zulip address, for example `https://zulip.example.com` |
+| `email` | Email address of the bot or user |
+| `key_file` | File holding the API key, mode must be `0600` |
 
 ## gmail
 
-Yıldızlı Gmail maillerini listeler, salt okunur yetkiyle çalışır. Eylem yoktur.
+Lists starred Gmail messages with read-only access. No actions.
 
-Profil ayarları:
+Profile settings:
 
-| Anahtar | Anlam |
+| Key | Meaning |
 |---|---|
-| `client_file` | Google Cloud'dan indirilen OAuth istemci JSON dosyası |
-| `token_file` | Yenileme token'ının yazılacağı ve okunacağı dosya, izni `0600` olmalı |
-| `api_url` | İsteğe bağlı, Gmail API adresini değiştirir; varsayılan Google'ın adresidir |
+| `client_file` | OAuth client JSON file downloaded from Google Cloud |
+| `token_file` | File the refresh token is written to and read from, mode must be `0600` |
+| `api_url` | Optional, overrides the Gmail API address; defaults to Google's |
 
-Token'ı bir kez üretmek için:
-
-```
-~/.local/share/focusdeck/plugins/gmail login --client-file <yol> --token-file <yol> [--hint <e-posta>]
-```
-
-`focusdeck plugin install gmail` ikiliyi bu yola `gmail` adıyla koyar. Kaynaktan derlediysen aynı komut `cargo run -p focusdeck-gmail -- login ...` ya da derlenen `focusdeck-gmail login ...` olur. Oturum düşerse plugin'in hata metni `focusdeck-gmail login` der, bu ikilinin kaynaktaki adıdır; kurulu ikili için yukarıdaki yolu kullan.
-
-Komut tarayıcıda açman için bir adres basar, onaydan sonra token'ı `--token-file` yoluna `0600` izinle yazar.
-
-## Sürüm alma
-
-Her plugin kendi etiketiyle çıkar. Önce `plugins/<ad>/Cargo.toml` içindeki sürümü yükselt ve `main`'e gönder, sonra:
+To create the token once:
 
 ```
-git tag <ad>-v<sürüm> && git push origin <ad>-v<sürüm>
+~/.local/share/focusdeck/plugins/gmail login --client-file <path> --token-file <path> [--hint <email>]
 ```
 
-Etiket `<ad>-v<sürüm>` biçiminde olmalı ve paket sürümüyle uyuşmalı. İş akışı iki hedef için ikili derler, GitHub sürümü açar ve `index.toml` dosyasını günceller. Etiketleri tek tek göndermek şart değil, birkaçını birden göndermek de olur.
+`focusdeck plugin install gmail` puts the binary at that path under the name `gmail`. If you built from source, the same command is `cargo run -p focusdeck-gmail -- login ...` or the built `focusdeck-gmail login ...`. If the session expires, the plugin's error says `focusdeck-gmail login`, which is the binary's name in the source tree; for the installed binary use the path above.
 
-## Yerel deneme
+The command prints an address to open in the browser and, after you approve, writes the token to the `--token-file` path with mode `0600`.
 
-`bash scripts/local-index.sh` ikilileri derler ve `dist/index.toml` dosyasını üretir. Dosyanın yolunu basar, `dist/` git'e girmez.
+## Releasing
+
+Each plugin is released with its own tag. First bump the version in `plugins/<name>/Cargo.toml` and push it to `main`, then:
+
+```
+git tag <name>-v<version> && git push origin <name>-v<version>
+```
+
+The tag must look like `<name>-v<version>` and match the package version. The workflow builds binaries for two targets, opens a GitHub release and updates `index.toml`. Tags don't have to be pushed one by one; pushing several at once works too.
+
+## Trying it locally
+
+`bash scripts/local-index.sh` builds the binaries and writes `dist/index.toml`. It prints the file's path; `dist/` is not tracked by git.
