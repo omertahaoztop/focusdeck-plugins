@@ -1,7 +1,7 @@
 [package]
 name = "focusdeck-index"
 version = "0.1.0"
-description = "Plugin dizini index.toml dosyasını günceller"
+description = "Updates the plugin index file index.toml"
 edition.workspace = true
 license.workspace = true
 

@@ -1,19 +1,23 @@
 [package]
 name = "focusdeck-gmail"
 version = "0.1.0"
-description = "Yıldızlı Gmail mailleri"
+description = "Starred Gmail messages"
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
 base64.workspace = true
 chrono.workspace = true
+focusdeck-i18n = { path = "../../../focusdeck/crates/focusdeck-i18n" }
 focusdeck-protocol = { git = "https://github.com/omertahaoztop/focusdeck", tag = "v0.1.0" }
 getrandom.workspace = true
 reqwest = { workspace = true, features = ["form"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+
+[build-dependencies]
+focusdeck-i18n = { path = "../../../focusdeck/crates/focusdeck-i18n" }
 
 [dev-dependencies]
 mockito.workspace = true

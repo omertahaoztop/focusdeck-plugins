@@ -46,20 +46,20 @@ fn is_identifier(text: &str) -> bool {
 
 fn validate(entry: &Entry) -> Result<(), String> {
     if !is_identifier(&entry.name) {
-        return Err(format!("Geçersiz plugin adı: {}", entry.name));
+        return Err(format!("Invalid plugin name: {}", entry.name));
     }
     if entry.version.is_empty() {
-        return Err("Sürüm boş".into());
+        return Err("Version is empty".into());
     }
     if entry.targets.is_empty() {
-        return Err("Hedef listesi boş".into());
+        return Err("Target list is empty".into());
     }
     for (triple, target) in &entry.targets {
         if !is_identifier(triple) {
-            return Err(format!("Geçersiz hedef adı: {triple}"));
+            return Err(format!("Invalid target name: {triple}"));
         }
         if !target.url.starts_with("https://") || target.url.chars().any(char::is_whitespace) {
-            return Err(format!("{triple} için adres https:// ile başlamalı"));
+            return Err(format!("URL for {triple} must start with https://"));
         }
         let hex = target.sha256.len() == SHA256_LEN
             && target
@@ -68,7 +68,7 @@ fn validate(entry: &Entry) -> Result<(), String> {
                 .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
         if !hex {
             return Err(format!(
-                "{triple} için sha256 64 küçük onaltılık hane olmalı"
+                "sha256 for {triple} must be 64 lowercase hex digits"
             ));
         }
     }
@@ -78,7 +78,7 @@ fn validate(entry: &Entry) -> Result<(), String> {
 pub fn set_entry(index: &str, entry: Entry) -> Result<String, String> {
     validate(&entry)?;
     let mut parsed: Index =
-        toml::from_str(index).map_err(|e| format!("Dizin okunamadı: {}", e.message()))?;
+        toml::from_str(index).map_err(|e| format!("Could not read the index: {}", e.message()))?;
     parsed.plugin.retain(|p| p.name != entry.name);
     parsed.plugin.push(Stored {
         name: entry.name,
@@ -88,7 +88,7 @@ pub fn set_entry(index: &str, entry: Entry) -> Result<String, String> {
         targets: entry.targets,
     });
     parsed.plugin.sort_by(|a, b| a.name.cmp(&b.name));
-    toml::to_string(&parsed).map_err(|e| format!("Dizin yazılamadı: {e}"))
+    toml::to_string(&parsed).map_err(|e| format!("Could not write the index: {e}"))
 }
 
 pub fn check_tag(tag: &str, name: &str, version: &str) -> Result<(), String> {
@@ -96,7 +96,7 @@ pub fn check_tag(tag: &str, name: &str, version: &str) -> Result<(), String> {
     if tag == expected {
         Ok(())
     } else {
-        Err(format!("Etiket {tag}, beklenen {expected}"))
+        Err(format!("Tag is {tag}, expected {expected}"))
     }
 }
 
@@ -134,7 +134,7 @@ mod tests {
     fn entry(name: &str, version: &str) -> Entry {
         Entry {
             name: name.into(),
-            description: format!("{name} açıklaması"),
+            description: format!("{name} description"),
             version: version.into(),
             targets: BTreeMap::from([
                 (
@@ -189,7 +189,7 @@ mod tests {
     fn output_parses_as_index() {
         let out = set_entry("", entry("redmine", "0.1.0")).unwrap();
         let plugin = &parse(&out).plugin[0];
-        assert_eq!(plugin.description, "redmine açıklaması");
+        assert_eq!(plugin.description, "redmine description");
         assert_eq!(plugin.protocol, 1);
         assert_eq!(plugin.targets.len(), 2);
         let x86 = &plugin.targets[X86];

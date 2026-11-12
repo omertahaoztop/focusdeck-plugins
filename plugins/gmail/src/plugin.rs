@@ -1,15 +1,14 @@
 use chrono::{DateTime, Duration, Local, Utc};
+use focusdeck_i18n::Localizer;
 use focusdeck_protocol::{ActionParams, Describe, Item, ListParams, PROTOCOL_VERSION, Plugin};
 use serde::Deserialize;
 use serde_json::Value;
 
 use crate::client::{Client, Message};
+use crate::i18n::{self, msg, t, t_args};
 use crate::oauth::{read_client_file, read_refresh_token};
 
 const DEFAULT_API: &str = "https://gmail.googleapis.com/gmail/v1/users/me";
-const NOT_CONFIGURED: &str = "Gmail ayarlanmadı";
-const NO_SUBJECT: &str = "(konu yok)";
-const NO_SENDER: &str = "(gönderen yok)";
 
 #[derive(Deserialize)]
 struct Config {
@@ -36,8 +35,12 @@ impl Plugin for Gmail {
     }
 
     fn configure(&mut self, config: Value) -> Result<(), String> {
-        let cfg: Config =
-            serde_json::from_value(config).map_err(|e| format!("Ayar hatalı: {e}"))?;
+        let cfg: Config = serde_json::from_value(config).map_err(|e| {
+            t_args(
+                msg::INVALID_SETTINGS,
+                &[("error", e.to_string().as_str().into())],
+            )
+        })?;
         let secret = read_client_file(cfg.client_file.as_ref())?;
         let refresh_token = read_refresh_token(cfg.token_file.as_ref())?;
         let api = cfg.api_url.as_deref().unwrap_or(DEFAULT_API);
@@ -48,36 +51,38 @@ impl Plugin for Gmail {
     }
 
     fn list(&mut self, _p: ListParams) -> Result<Vec<Item>, String> {
-        let client = self.client.as_mut().ok_or(NOT_CONFIGURED)?;
+        let client = self.client.as_mut().ok_or_else(|| t(msg::NOT_CONFIGURED))?;
         let now = Local::now();
         Ok(client
             .starred()?
             .iter()
-            .map(|msg| to_item(msg, now))
+            .map(|message| to_item(message, now))
             .collect())
     }
 
     fn action(&mut self, _p: ActionParams) -> Result<Option<Item>, String> {
-        Err("bu kutuda eylem yok".into())
+        Err(t(msg::NO_ACTIONS))
     }
 }
 
-pub fn to_item(msg: &Message, now: DateTime<Local>) -> Item {
-    let sent = DateTime::<Utc>::from_timestamp_millis(msg.internal_date_ms)
+pub fn to_item(message: &Message, now: DateTime<Local>) -> Item {
+    let localizer = i18n::current();
+    let sent = DateTime::<Utc>::from_timestamp_millis(message.internal_date_ms)
         .unwrap_or(DateTime::<Utc>::UNIX_EPOCH);
     let age = now.signed_duration_since(sent).max(Duration::zero());
-    let subject = printable(&msg.subject);
+    let subject = printable(&message.subject);
+    let sender = sender_label(localizer, &message.from);
     Item {
-        id: msg.id.clone(),
+        id: message.id.clone(),
         title: if subject.is_empty() {
-            NO_SUBJECT.into()
+            localizer.t(msg::NO_SUBJECT)
         } else {
             subject
         },
-        subtitle: Some(format!("{} · {}", sender_label(&msg.from), age_label(age))),
+        subtitle: Some(format!("{sender} · {}", age_label(localizer, age))),
         url: Some(format!(
             "https://mail.google.com/mail/#all/{}",
-            msg.thread_id
+            message.thread_id
         )),
         due: None,
         overdue: age >= Duration::days(3),
@@ -89,18 +94,18 @@ pub fn to_item(msg: &Message, now: DateTime<Local>) -> Item {
     }
 }
 
-fn age_label(age: Duration) -> String {
+pub fn age_label(localizer: &Localizer, age: Duration) -> String {
     let minutes = age.num_minutes();
     if minutes < 60 {
-        format!("{minutes}dk")
+        localizer.t_args(msg::AGE_MINUTES, &[("minutes", minutes.into())])
     } else if minutes < 24 * 60 {
-        format!("{}s", minutes / 60)
+        localizer.t_args(msg::AGE_HOURS, &[("hours", (minutes / 60).into())])
     } else {
-        format!("{}g", minutes / (24 * 60))
+        localizer.t_args(msg::AGE_DAYS, &[("days", (minutes / (24 * 60)).into())])
     }
 }
 
-fn sender_label(from: &str) -> String {
+fn sender_label(localizer: &Localizer, from: &str) -> String {
     let from = printable(from);
     let (name, address) = match (from.rfind('<'), from.rfind('>')) {
         (Some(open), Some(close)) if open < close => (&from[..open], from[open + 1..close].trim()),
@@ -112,7 +117,7 @@ fn sender_label(from: &str) -> String {
     } else if !address.is_empty() {
         address.to_string()
     } else {
-        NO_SENDER.to_string()
+        localizer.t(msg::NO_SENDER)
     }
 }
 

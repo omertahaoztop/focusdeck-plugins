@@ -4,9 +4,10 @@ use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Duration, Local};
 use focusdeck_gmail::client::Message;
+use focusdeck_gmail::i18n;
 use focusdeck_gmail::login::{self, LoginArgs};
 use focusdeck_gmail::oauth;
-use focusdeck_gmail::plugin::{Gmail, to_item};
+use focusdeck_gmail::plugin::{Gmail, age_label, to_item};
 use focusdeck_protocol::{ActionParams, ListParams, PROTOCOL_VERSION, Plugin, View};
 use mockito::{Matcher, Mock, ServerGuard};
 use serde_json::{Value, json};
@@ -15,7 +16,7 @@ use tempfile::{NamedTempFile, TempDir};
 const REFRESH: &str = "refresh-secret-1";
 const CLIENT_SECRET: &str = "client-secret-1";
 const API: &str = "/gmail/v1/users/me";
-const REVOKED: &str = "Gmail oturumu düştü: focusdeck-gmail login";
+const REVOKED: &str = "Gmail session expired: focusdeck-gmail login";
 
 struct Files {
     client: NamedTempFile,
@@ -161,7 +162,7 @@ fn action_has_nothing_to_do() {
             args: Value::Null,
         })
         .unwrap_err();
-    assert_eq!(err, "bu kutuda eylem yok");
+    assert_eq!(err, "this box has no actions");
 }
 
 #[test]
@@ -249,8 +250,8 @@ fn missing_headers_fall_back() {
         json!([]),
     );
     let items = list(&mut plugin).unwrap();
-    assert_eq!(items[0].title, "(konu yok)");
-    assert_eq!(items[0].subtitle.as_deref(), Some("(gönderen yok) · 0dk"));
+    assert_eq!(items[0].title, "(no subject)");
+    assert_eq!(items[0].subtitle.as_deref(), Some("(no sender) · 0m"));
 }
 
 #[test]
@@ -267,19 +268,19 @@ fn header_names_compare_case_insensitively() {
     );
     let items = list(&mut plugin).unwrap();
     assert_eq!(items[0].title, "konu");
-    assert_eq!(items[0].subtitle.as_deref(), Some("Ad · 0dk"));
+    assert_eq!(items[0].subtitle.as_deref(), Some("Ad · 0m"));
 }
 
 #[test]
 fn sender_display_forms() {
     let now = Local::now();
     let subtitle = |from: &str| to_item(&message(from, "s", now), now).subtitle.unwrap();
-    assert_eq!(subtitle(r#""Ad Soyad" <a@example.com>"#), "Ad Soyad · 0dk");
-    assert_eq!(subtitle("Ad Soyad <a@example.com>"), "Ad Soyad · 0dk");
-    assert_eq!(subtitle("a@example.com"), "a@example.com · 0dk");
-    assert_eq!(subtitle("<a@example.com>"), "a@example.com · 0dk");
-    assert_eq!(subtitle(r#""" <a@example.com>"#), "a@example.com · 0dk");
-    assert_eq!(subtitle("  "), "(gönderen yok) · 0dk");
+    assert_eq!(subtitle(r#""Ad Soyad" <a@example.com>"#), "Ad Soyad · 0m");
+    assert_eq!(subtitle("Ad Soyad <a@example.com>"), "Ad Soyad · 0m");
+    assert_eq!(subtitle("a@example.com"), "a@example.com · 0m");
+    assert_eq!(subtitle("<a@example.com>"), "a@example.com · 0m");
+    assert_eq!(subtitle(r#""" <a@example.com>"#), "a@example.com · 0m");
+    assert_eq!(subtitle("  "), "(no sender) · 0m");
 }
 
 #[test]
@@ -290,12 +291,24 @@ fn age_labels() {
             .subtitle
             .unwrap()
     };
-    assert_eq!(subtitle(Duration::minutes(59)), "A · 59dk");
-    assert_eq!(subtitle(Duration::minutes(60)), "A · 1s");
-    assert_eq!(subtitle(Duration::hours(23)), "A · 23s");
-    assert_eq!(subtitle(Duration::hours(24)), "A · 1g");
-    assert_eq!(subtitle(Duration::days(5)), "A · 5g");
-    assert_eq!(subtitle(Duration::minutes(-5)), "A · 0dk");
+    assert_eq!(subtitle(Duration::minutes(59)), "A · 59m");
+    assert_eq!(subtitle(Duration::minutes(60)), "A · 1h");
+    assert_eq!(subtitle(Duration::hours(23)), "A · 23h");
+    assert_eq!(subtitle(Duration::hours(24)), "A · 1d");
+    assert_eq!(subtitle(Duration::days(5)), "A · 5d");
+    assert_eq!(subtitle(Duration::minutes(-5)), "A · 0m");
+}
+
+#[test]
+fn age_by_language() {
+    let tr = i18n::localizer(Some("tr"));
+    let en = i18n::localizer(Some("en"));
+    assert_eq!(age_label(&tr, Duration::minutes(40)), "40dk");
+    assert_eq!(age_label(&tr, Duration::hours(5)), "5s");
+    assert_eq!(age_label(&tr, Duration::days(4)), "4g");
+    assert_eq!(age_label(&en, Duration::minutes(40)), "40m");
+    assert_eq!(age_label(&en, Duration::hours(5)), "5h");
+    assert_eq!(age_label(&en, Duration::days(4)), "4d");
 }
 
 #[test]
@@ -310,7 +323,7 @@ fn control_characters_never_reach_the_terminal() {
         now,
     );
     assert_eq!(item.title, "ko]0;xnu");
-    assert_eq!(item.subtitle.as_deref(), Some("A[31m · 0dk"));
+    assert_eq!(item.subtitle.as_deref(), Some("A[31m · 0m"));
 }
 
 #[test]
@@ -411,10 +424,7 @@ fn empty_token_file_fails_configure() {
         .unwrap_err();
     assert_eq!(
         err,
-        format!(
-            "Gmail anahtar dosyası boş: {}",
-            files.token.path().display()
-        )
+        format!("Gmail key file is empty: {}", files.token.path().display())
     );
 }
 
@@ -423,14 +433,14 @@ fn missing_setting_fails_configure() {
     let err = Gmail::default()
         .configure(json!({"client_file": "/c"}))
         .unwrap_err();
-    assert!(err.starts_with("Ayar hatalı"), "{err}");
+    assert!(err.starts_with("Invalid settings"), "{err}");
 }
 
 #[test]
 fn unconfigured_plugin_errors() {
     assert_eq!(
         list(&mut Gmail::default()).unwrap_err(),
-        "Gmail ayarlanmadı"
+        "Gmail is not configured"
     );
 }
 
@@ -517,7 +527,7 @@ fn login_exchanges_code_and_writes_token() {
 
     exchange.assert();
     let page = rx.recv().unwrap();
-    assert!(page.ends_with("focusdeck: Gmail bağlandı, bu sekmeyi kapatabilirsin."));
+    assert!(page.ends_with("focusdeck: Gmail connected, you can close this tab."));
     assert_eq!(
         oauth::pkce_challenge(&verifier.lock().unwrap()),
         *challenge.lock().unwrap()
@@ -555,7 +565,7 @@ fn login_without_refresh_token_fails() {
         std::thread::spawn(move || get(port, &format!("/?code=c&state={state}")));
     })
     .unwrap_err();
-    assert_eq!(err, "Google refresh token vermedi");
+    assert_eq!(err, "Google did not return a refresh token");
     assert!(!token_path.exists());
 }
 
@@ -580,6 +590,6 @@ fn login_rejects_wrong_state_without_contacting_the_token_endpoint() {
         std::thread::spawn(move || get(port, "/?code=c&state=forged"));
     })
     .unwrap_err();
-    assert_eq!(err, "onay reddedildi");
+    assert_eq!(err, "authorization denied");
     exchange.assert();
 }

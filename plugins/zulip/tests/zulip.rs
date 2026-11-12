@@ -3,7 +3,8 @@ use std::os::unix::fs::PermissionsExt;
 
 use focusdeck_protocol::{ActionParams, ListParams, PROTOCOL_VERSION, Plugin, View};
 use focusdeck_zulip::client::Message;
-use focusdeck_zulip::plugin::{Zulip, to_item};
+use focusdeck_zulip::i18n;
+use focusdeck_zulip::plugin::{Zulip, to_item, to_item_in};
 use mockito::{Matcher, Mock, ServerGuard};
 use serde_json::{Value, json};
 use tempfile::NamedTempFile;
@@ -132,7 +133,7 @@ fn lists_starred_newest_first() {
     let ids: Vec<_> = items.iter().map(|i| i.id.as_str()).collect();
     assert_eq!(ids, ["9", "5"]);
     assert_eq!(items[0].title, "yeni");
-    assert_eq!(items[0].subtitle.as_deref(), Some("Ali Veli · özel"));
+    assert_eq!(items[0].subtitle.as_deref(), Some("Ali Veli · private"));
     assert_eq!(
         items[1].subtitle.as_deref(),
         Some("Ayşe Yılmaz · #genel > duyurular")
@@ -168,10 +169,24 @@ fn follows_pages_until_found_oldest() {
 }
 
 #[test]
+fn placeholders_by_language() {
+    let base = "https://zulip.example.com";
+    let tr = i18n::localizer(Some("tr"));
+    let en = i18n::localizer(Some("en"));
+    let blank = message(stream_msg(1, "\n  \n"));
+    assert_eq!(to_item_in(&tr, &blank, base).title, "(boş mesaj)");
+    assert_eq!(to_item_in(&en, &blank, base).title, "(empty message)");
+    let private = message(private_msg(2, "x"));
+    let subtitle = |localizer| to_item_in(localizer, &private, base).subtitle;
+    assert_eq!(subtitle(&tr).as_deref(), Some("Ali Veli · özel"));
+    assert_eq!(subtitle(&en).as_deref(), Some("Ali Veli · private"));
+}
+
+#[test]
 fn blank_content_gets_placeholder_title() {
     let base = "https://zulip.example.com";
     let blank = to_item(&message(stream_msg(1, "\n  \n")), base);
-    assert_eq!(blank.title, "(boş mesaj)");
+    assert_eq!(blank.title, "(empty message)");
     let quoted = to_item(&message(stream_msg(2, "> alıntı\nasıl metin")), base);
     assert_eq!(quoted.title, "alıntı");
     let bare_quote = to_item(&message(stream_msg(3, ">\n>> \nmetin")), base);
@@ -218,7 +233,7 @@ fn unknown_action_is_error() {
             args: Value::Null,
         })
         .unwrap_err();
-    assert_eq!(err, "Bilinmeyen eylem: delete");
+    assert_eq!(err, "Unknown action: delete");
 }
 
 #[test]
@@ -247,7 +262,7 @@ fn rejected_key_fails_configure() {
     let err = Zulip::default()
         .configure(config(&server, &file))
         .unwrap_err();
-    assert_eq!(err, "Zulip: anahtar reddedildi");
+    assert_eq!(err, "Zulip: key rejected");
     assert!(!err.contains(KEY));
 }
 
@@ -260,7 +275,7 @@ fn empty_key_file_fails_configure() {
         .unwrap_err();
     assert_eq!(
         err,
-        format!("Zulip anahtar dosyası boş: {}", file.path().display())
+        format!("Zulip key file is empty: {}", file.path().display())
     );
 }
 
@@ -269,11 +284,11 @@ fn missing_setting_fails_configure() {
     let err = Zulip::default()
         .configure(json!({"url": "http://x", "key_file": "/k"}))
         .unwrap_err();
-    assert!(err.starts_with("Ayar hatalı"), "{err}");
+    assert!(err.starts_with("Invalid settings"), "{err}");
 }
 
 #[test]
 fn unconfigured_plugin_errors() {
     let err = list(&mut Zulip::default()).unwrap_err();
-    assert_eq!(err, "Zulip ayarlanmadı");
+    assert_eq!(err, "Zulip is not configured");
 }

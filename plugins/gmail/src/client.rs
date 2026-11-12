@@ -5,11 +5,10 @@ use reqwest::Url;
 use reqwest::blocking::{Client as Http, Response};
 use serde::Deserialize;
 
+use crate::i18n::{msg, t, t_args};
 use crate::oauth::{ClientSecret, TokenError, request_token};
 
 const RENEW_MARGIN: Duration = Duration::from_secs(60);
-const SESSION_LOST: &str = "Gmail oturumu düştü: focusdeck-gmail login";
-const BAD_RESPONSE: &str = "Gmail: yanıt çözülemedi";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Message {
@@ -87,12 +86,12 @@ impl Client {
         ];
         let response = match request_token(&self.http, &self.secret, &grant) {
             Ok(response) => response,
-            Err(TokenError::Status(400 | 401)) => return Err(SESSION_LOST.into()),
+            Err(TokenError::Status(400 | 401)) => return Err(t(msg::SESSION_LOST)),
             Err(TokenError::Status(code)) => return Err(status_error(code)),
             Err(TokenError::Other(message)) => return Err(message),
         };
         if response.access_token.is_empty() {
-            return Err(BAD_RESPONSE.into());
+            return Err(t(msg::RESPONSE_UNREADABLE));
         }
         self.access = Some(Access {
             token: response.access_token,
@@ -112,7 +111,7 @@ impl Client {
         self.access
             .as_ref()
             .map(|a| a.token.clone())
-            .ok_or_else(|| BAD_RESPONSE.to_string())
+            .ok_or_else(|| t(msg::RESPONSE_UNREADABLE))
     }
 
     fn get(&mut self, url: Url, query: &[(&str, &str)]) -> Result<Response, String> {
@@ -131,9 +130,9 @@ impl Client {
     }
 
     fn url(&self, segments: &[&str]) -> Result<Url, String> {
-        let mut url = Url::parse(&self.api).map_err(|_| "Gmail: api_url geçersiz".to_string())?;
+        let mut url = Url::parse(&self.api).map_err(|_| t(msg::API_URL_INVALID))?;
         url.path_segments_mut()
-            .map_err(|_| "Gmail: api_url geçersiz".to_string())?
+            .map_err(|_| t(msg::API_URL_INVALID))?
             .pop_if_empty()
             .extend(segments);
         Ok(url)
@@ -153,7 +152,7 @@ impl Client {
             let page: IdPage = self
                 .get(list_url.clone(), &query)?
                 .json()
-                .map_err(|_| BAD_RESPONSE.to_string())?;
+                .map_err(|_| t(msg::RESPONSE_UNREADABLE))?;
             ids.extend(
                 page.messages
                     .into_iter()
@@ -183,11 +182,11 @@ impl Client {
         let meta: Metadata = self
             .get(url, &query)?
             .json()
-            .map_err(|_| BAD_RESPONSE.to_string())?;
+            .map_err(|_| t(msg::RESPONSE_UNREADABLE))?;
         let internal_date_ms = meta
             .internal_date
             .parse()
-            .map_err(|_| BAD_RESPONSE.to_string())?;
+            .map_err(|_| t(msg::RESPONSE_UNREADABLE))?;
         let header = |name: &str| {
             meta.payload
                 .headers
@@ -215,19 +214,19 @@ pub(crate) fn http() -> Result<Http, String> {
         .user_agent(concat!("focusdeck-gmail/", env!("CARGO_PKG_VERSION")))
         .timeout(Duration::from_secs(15))
         .build()
-        .map_err(|_| "HTTP istemcisi kurulamadı".to_string())
+        .map_err(|_| t(msg::HTTP_CLIENT_FAILED))
 }
 
 pub(crate) fn transport_error(e: reqwest::Error) -> String {
     if e.is_timeout() {
-        "Gmail: zaman aşımı".into()
+        t(msg::TIMED_OUT)
     } else if e.is_connect() {
-        "Gmail: bağlantı kurulamadı".into()
+        t(msg::CONNECT_FAILED)
     } else {
-        "Gmail: istek başarısız".into()
+        t(msg::REQUEST_FAILED)
     }
 }
 
 pub(crate) fn status_error(code: u16) -> String {
-    format!("Gmail: HTTP {code}")
+    t_args(msg::HTTP_STATUS, &[("status", i64::from(code).into())])
 }

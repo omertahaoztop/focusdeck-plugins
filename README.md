@@ -6,6 +6,8 @@ Plugins for [focusdeck](https://github.com/omertahaoztop/focusdeck). Each plugin
 
 Plugins run with your user's permissions; there is no sandbox. Only install from indexes you trust.
 
+Plugins speak the language focusdeck passes in `FOCUSDECK_LANG`; run directly they use `LC_ALL`/`LC_MESSAGES`/`LANG`. English and Turkish are included, and any other language falls back to English.
+
 ## Install
 
 ```
@@ -85,6 +87,10 @@ To create the token once:
 `focusdeck plugin install gmail` puts the binary at that path under the name `gmail`. If you built from source, the same command is `cargo run -p focusdeck-gmail -- login ...` or the built `focusdeck-gmail login ...`. If the session expires, the plugin's error says `focusdeck-gmail login`, which is the binary's name in the source tree; for the installed binary use the path above.
 
 The command prints an address to open in the browser and, after you approve, writes the token to the `--token-file` path with mode `0600`.
+
+## Translating
+
+Each plugin keeps its texts in `plugins/<name>/locales/`. To add a language, copy `en.ftl` to `plugins/<name>/locales/<code>.ftl` (for example `de.ftl`) and translate the values. Keep the message ids and the `{ $name }` placeholders as they are. `cargo test` fails when a language file misses an id, has an extra one or uses different placeholders than `en.ftl`. A message missing from a language is shown in English.
 
 ## Releasing
 

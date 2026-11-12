@@ -6,6 +6,8 @@ use reqwest::blocking::{Client as Http, RequestBuilder, Response};
 use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 
+use crate::i18n::{msg, t, t_args};
+
 const BATCH: &str = "1000";
 const STARRED_NARROW: &str = r#"[{"operator":"is","operand":"starred"}]"#;
 
@@ -53,7 +55,7 @@ impl Client {
             .user_agent(concat!("focusdeck-zulip/", env!("CARGO_PKG_VERSION")))
             .timeout(Duration::from_secs(15))
             .build()
-            .map_err(|_| "HTTP istemcisi kurulamadı".to_string())?;
+            .map_err(|_| t(msg::HTTP_CLIENT_FAILED))?;
         Ok(Self {
             http,
             base: base_url.trim_end_matches('/').to_string(),
@@ -80,7 +82,7 @@ impl Client {
     pub fn me(&self) -> Result<(), String> {
         let response = self.send(self.http.get(format!("{}/api/v1/users/me", self.base)))?;
         match response.status() {
-            StatusCode::UNAUTHORIZED => Err("Zulip: anahtar reddedildi".into()),
+            StatusCode::UNAUTHORIZED => Err(t(msg::KEY_REJECTED)),
             status if status.is_success() => Ok(()),
             status => Err(status_error(status)),
         }
@@ -109,7 +111,7 @@ impl Client {
             let page: Page = self
                 .send_ok(request)?
                 .json()
-                .map_err(|_| "Zulip: yanıt çözülemedi".to_string())?;
+                .map_err(|_| t(msg::RESPONSE_UNREADABLE))?;
             let oldest = page.messages.iter().map(|m| m.id).min();
             let before = all.len();
             all.extend(page.messages.into_iter().filter(|m| seen.insert(m.id)));
@@ -139,14 +141,17 @@ impl Client {
 
 fn transport_error(e: reqwest::Error) -> String {
     if e.is_timeout() {
-        "Zulip: zaman aşımı".into()
+        t(msg::TIMED_OUT)
     } else if e.is_connect() {
-        "Zulip: bağlantı kurulamadı".into()
+        t(msg::CONNECT_FAILED)
     } else {
-        "Zulip: istek başarısız".into()
+        t(msg::REQUEST_FAILED)
     }
 }
 
 fn status_error(status: StatusCode) -> String {
-    format!("Zulip: HTTP {}", status.as_u16())
+    t_args(
+        msg::HTTP_STATUS,
+        &[("status", status.as_u16().to_string().as_str().into())],
+    )
 }

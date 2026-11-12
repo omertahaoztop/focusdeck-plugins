@@ -1,0 +1,15 @@
+not-configured = Zulip ayarlanmadı
+invalid-settings = Ayar hatalı: { $error }
+key-file-unreadable = Zulip anahtar dosyası okunamadı: { $path }
+key-file-empty = Zulip anahtar dosyası boş: { $path }
+invalid-id = Geçersiz kimlik: { $id }
+unknown-action = Bilinmeyen eylem: { $action }
+http-client-failed = HTTP istemcisi kurulamadı
+key-rejected = Zulip: anahtar reddedildi
+response-unreadable = Zulip: yanıt çözülemedi
+timed-out = Zulip: zaman aşımı
+connect-failed = Zulip: bağlantı kurulamadı
+request-failed = Zulip: istek başarısız
+http-status = Zulip: HTTP { $status }
+private-subtitle = { $sender } · özel
+empty-title = (boş mesaj)

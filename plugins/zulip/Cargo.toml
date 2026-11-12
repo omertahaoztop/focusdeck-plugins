@@ -1,15 +1,19 @@
 [package]
 name = "focusdeck-zulip"
 version = "0.1.0"
-description = "Yıldızlı Zulip mesajları"
+description = "Starred Zulip messages"
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
+focusdeck-i18n = { path = "../../../focusdeck/crates/focusdeck-i18n" }
 focusdeck-protocol = { git = "https://github.com/omertahaoztop/focusdeck", tag = "v0.1.0" }
 reqwest = { workspace = true, features = ["form"] }
 serde.workspace = true
 serde_json.workspace = true
+
+[build-dependencies]
+focusdeck-i18n = { path = "../../../focusdeck/crates/focusdeck-i18n" }
 
 [dev-dependencies]
 mockito.workspace = true

@@ -7,18 +7,13 @@ use std::time::{Duration, Instant};
 use reqwest::Url;
 
 use crate::client::http;
+use crate::i18n::{msg, t, t_args};
 use crate::oauth::{
     pkce_challenge, random_token, read_client_file, request_token, token_error_message, write_token,
 };
 
-const USAGE: &str =
-    "Kullanım: focusdeck-gmail login --client-file <yol> --token-file <yol> [--hint <e-posta>]";
 const SCOPE: &str = "https://www.googleapis.com/auth/gmail.readonly";
 const CALLBACK_TIMEOUT: Duration = Duration::from_secs(300);
-const DENIED: &str = "onay reddedildi";
-const CONNECTED_PAGE: &str = "focusdeck: Gmail bağlandı, bu sekmeyi kapatabilirsin.";
-const DENIED_PAGE: &str = "focusdeck: Gmail onayı reddedildi.";
-const NOT_FOUND_PAGE: &str = "focusdeck: bulunamadı";
 const MAX_REQUEST_BYTES: u64 = 16 * 1024;
 
 pub struct LoginArgs {
@@ -29,7 +24,7 @@ pub struct LoginArgs {
 
 impl LoginArgs {
     pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Self, String> {
-        let usage_error = |reason: String| format!("{reason}\n{USAGE}");
+        let usage_error = |reason: String| format!("{reason}\n{}", t(msg::USAGE));
         let mut client_file = None;
         let mut token_file = None;
         let mut hint = None;
@@ -39,15 +34,23 @@ impl LoginArgs {
                 "--client-file" => &mut client_file,
                 "--token-file" => &mut token_file,
                 "--hint" => &mut hint,
-                other => return Err(usage_error(format!("Bilinmeyen bayrak: {other}"))),
+                other => {
+                    return Err(usage_error(t_args(
+                        msg::UNKNOWN_FLAG,
+                        &[("flag", other.into())],
+                    )));
+                }
             };
-            let value = args
-                .next()
-                .ok_or_else(|| usage_error(format!("{flag} için değer yok")))?;
+            let value = args.next().ok_or_else(|| {
+                usage_error(t_args(
+                    msg::FLAG_VALUE_MISSING,
+                    &[("flag", flag.as_str().into())],
+                ))
+            })?;
             *slot = Some(value);
         }
         let required = |value: Option<String>, flag: &str| {
-            value.ok_or_else(|| usage_error(format!("Eksik bayrak: {flag}")))
+            value.ok_or_else(|| usage_error(t_args(msg::FLAG_MISSING, &[("flag", flag.into())])))
         };
         Ok(Self {
             client_file: required(client_file, "--client-file")?.into(),
@@ -94,7 +97,7 @@ pub fn check_callback(callback: Callback, expected_state: &str) -> Result<String
             state: Some(state),
             error: None,
         } if state == expected_state => Ok(code),
-        _ => Err(DENIED.into()),
+        _ => Err(t(msg::DENIED)),
     }
 }
 
@@ -105,11 +108,11 @@ pub fn wait_for_callback(
 ) -> Result<String, String> {
     listener
         .set_nonblocking(true)
-        .map_err(|_| "Geri çağrı dinleyicisi kurulamadı".to_string())?;
+        .map_err(|_| t(msg::LISTENER_SETUP_FAILED))?;
     let deadline = Instant::now() + timeout;
     loop {
         if Instant::now() >= deadline {
-            return Err("5 dakikada onay gelmedi".into());
+            return Err(t(msg::APPROVAL_TIMEOUT));
         }
         match listener.accept() {
             Ok((stream, _)) => {
@@ -121,7 +124,7 @@ pub fn wait_for_callback(
                 std::thread::sleep(Duration::from_millis(50));
             }
             Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
-            Err(_) => return Err("Geri çağrı dinleyicisi başarısız".into()),
+            Err(_) => return Err(t(msg::LISTENER_FAILED)),
         }
     }
 }
@@ -136,14 +139,14 @@ fn serve_connection(stream: TcpStream, expected_state: &str) -> Option<Result<St
     let callback = match parse_request_line(&line) {
         Some(cb) if cb.code.is_some() || cb.error.is_some() => cb,
         _ => {
-            respond(stream, "404 Not Found", NOT_FOUND_PAGE);
+            respond(stream, "404 Not Found", &t(msg::NOT_FOUND_PAGE));
             return None;
         }
     };
     let result = check_callback(callback, expected_state);
     match &result {
-        Ok(_) => respond(stream, "200 OK", CONNECTED_PAGE),
-        Err(_) => respond(stream, "200 OK", DENIED_PAGE),
+        Ok(_) => respond(stream, "200 OK", &t(msg::CONNECTED_PAGE)),
+        Err(_) => respond(stream, "200 OK", &t(msg::DENIED_PAGE)),
     }
     Some(result)
 }
@@ -171,7 +174,7 @@ fn respond(mut stream: TcpStream, status: &str, body: &str) {
 pub fn run(args: LoginArgs) -> Result<(), String> {
     let token_file = args.token_file.clone();
     run_with(args, |url| {
-        eprintln!("Tarayıcıda şu adresi aç ve onay ver:");
+        eprintln!("{}", t(msg::OPEN_PROMPT));
         println!("{url}");
         let _ = Command::new("xdg-open")
             .arg(url)
@@ -180,7 +183,13 @@ pub fn run(args: LoginArgs) -> Result<(), String> {
             .stderr(Stdio::null())
             .spawn();
     })?;
-    println!("Gmail bağlandı, token yazıldı: {}", token_file.display());
+    println!(
+        "{}",
+        t_args(
+            msg::CONNECTED,
+            &[("path", token_file.display().to_string().as_str().into())]
+        )
+    );
     Ok(())
 }
 
@@ -188,18 +197,18 @@ pub fn run_with(args: LoginArgs, announce: impl FnOnce(&str)) -> Result<(), Stri
     let secret = read_client_file(&args.client_file)?;
     let verifier = random_token(32)?;
     let state = random_token(16)?;
-    let listener = TcpListener::bind(("127.0.0.1", 0))
-        .map_err(|_| "Geri çağrı dinleyicisi kurulamadı".to_string())?;
+    let listener =
+        TcpListener::bind(("127.0.0.1", 0)).map_err(|_| t(msg::LISTENER_SETUP_FAILED))?;
     let port = listener
         .local_addr()
-        .map_err(|_| "Geri çağrı dinleyicisi kurulamadı".to_string())?
+        .map_err(|_| t(msg::LISTENER_SETUP_FAILED))?
         .port();
     let redirect_uri = format!("http://127.0.0.1:{port}/");
 
     let mut auth_url = Url::parse(&secret.auth_uri)
         .ok()
         .filter(|u| matches!(u.scheme(), "https" | "http"))
-        .ok_or_else(|| "Gmail istemci dosyasındaki auth_uri geçersiz".to_string())?;
+        .ok_or_else(|| t(msg::AUTH_URI_INVALID))?;
     {
         let challenge = pkce_challenge(&verifier);
         let mut query = auth_url.query_pairs_mut();
@@ -233,9 +242,16 @@ pub fn run_with(args: LoginArgs, announce: impl FnOnce(&str)) -> Result<(), Stri
     let refresh_token = response
         .refresh_token
         .filter(|t| !t.trim().is_empty())
-        .ok_or_else(|| "Google refresh token vermedi".to_string())?;
-    write_token(&args.token_file, &refresh_token)
-        .map_err(|_| format!("Token dosyası yazılamadı: {}", args.token_file.display()))
+        .ok_or_else(|| t(msg::NO_REFRESH_TOKEN))?;
+    write_token(&args.token_file, &refresh_token).map_err(|_| {
+        t_args(
+            msg::TOKEN_WRITE_FAILED,
+            &[(
+                "path",
+                args.token_file.display().to_string().as_str().into(),
+            )],
+        )
+    })
 }
 
 #[cfg(test)]
@@ -271,16 +287,19 @@ mod tests {
     #[test]
     fn mismatched_state_is_rejected() {
         let cb = parse_request_line("GET /?code=abc&state=other HTTP/1.1").unwrap();
-        assert_eq!(check_callback(cb, "xyz").unwrap_err(), "onay reddedildi");
+        assert_eq!(
+            check_callback(cb, "xyz").unwrap_err(),
+            "authorization denied"
+        );
         let no_state = parse_request_line("GET /?code=abc HTTP/1.1").unwrap();
         assert_eq!(
             check_callback(no_state, "xyz").unwrap_err(),
-            "onay reddedildi"
+            "authorization denied"
         );
         let denied = parse_request_line("GET /?error=access_denied&state=xyz HTTP/1.1").unwrap();
         assert_eq!(
             check_callback(denied, "xyz").unwrap_err(),
-            "onay reddedildi"
+            "authorization denied"
         );
         let good = parse_request_line("GET /?code=abc&state=xyz HTTP/1.1").unwrap();
         assert_eq!(check_callback(good, "xyz").unwrap(), "abc");
@@ -309,7 +328,7 @@ mod tests {
         assert!(ico.starts_with("HTTP/1.1 404"), "{ico}");
         assert!(ok.starts_with("HTTP/1.1 200"), "{ok}");
         assert!(
-            ok.ends_with("focusdeck: Gmail bağlandı, bu sekmeyi kapatabilirsin."),
+            ok.ends_with("focusdeck: Gmail connected, you can close this tab."),
             "{ok}"
         );
     }
@@ -318,7 +337,7 @@ mod tests {
     fn missing_callback_times_out() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let err = wait_for_callback(&listener, "xyz", Duration::from_millis(200)).unwrap_err();
-        assert_eq!(err, "5 dakikada onay gelmedi");
+        assert_eq!(err, "No approval within 5 minutes");
     }
 
     #[test]
@@ -348,7 +367,7 @@ mod tests {
         ] {
             let err = args(list).err().unwrap();
             assert!(
-                err.contains("focusdeck-gmail login --client-file <yol> --token-file <yol>"),
+                err.contains("focusdeck-gmail login --client-file <path> --token-file <path>"),
                 "{err}"
             );
         }

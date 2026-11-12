@@ -10,6 +10,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 use crate::client::{status_error, transport_error};
+use crate::i18n::{msg, t, t_args};
 
 #[derive(Deserialize)]
 pub struct ClientSecret {
@@ -46,24 +47,46 @@ pub enum TokenError {
 
 pub fn read_client_file(path: &Path) -> Result<ClientSecret, String> {
     let shown = path.display();
-    let text = fs::read_to_string(path)
-        .map_err(|_| format!("Gmail istemci dosyası okunamadı: {shown}"))?;
-    let file: ClientFile = serde_json::from_str(&text)
-        .map_err(|_| format!("Gmail istemci dosyası çözülemedi: {shown}"))?;
-    file.installed
-        .or(file.web)
-        .ok_or_else(|| format!("Gmail istemci dosyası çözülemedi: {shown}"))
+    let text = fs::read_to_string(path).map_err(|_| {
+        t_args(
+            msg::CLIENT_FILE_UNREADABLE,
+            &[("path", shown.to_string().as_str().into())],
+        )
+    })?;
+    let file: ClientFile = serde_json::from_str(&text).map_err(|_| {
+        t_args(
+            msg::CLIENT_FILE_INVALID,
+            &[("path", shown.to_string().as_str().into())],
+        )
+    })?;
+    file.installed.or(file.web).ok_or_else(|| {
+        t_args(
+            msg::CLIENT_FILE_INVALID,
+            &[("path", shown.to_string().as_str().into())],
+        )
+    })
 }
 
 pub fn read_refresh_token(path: &Path) -> Result<String, String> {
     let shown = path.display();
-    let text = fs::read_to_string(path)
-        .map_err(|_| format!("Gmail anahtar dosyası okunamadı: {shown}"))?;
-    let file: TokenFile = serde_json::from_str(&text)
-        .map_err(|_| format!("Gmail anahtar dosyası çözülemedi: {shown}"))?;
+    let text = fs::read_to_string(path).map_err(|_| {
+        t_args(
+            msg::KEY_FILE_UNREADABLE,
+            &[("path", shown.to_string().as_str().into())],
+        )
+    })?;
+    let file: TokenFile = serde_json::from_str(&text).map_err(|_| {
+        t_args(
+            msg::KEY_FILE_INVALID,
+            &[("path", shown.to_string().as_str().into())],
+        )
+    })?;
     let token = file.refresh_token.trim();
     if token.is_empty() {
-        return Err(format!("Gmail anahtar dosyası boş: {shown}"));
+        return Err(t_args(
+            msg::KEY_FILE_EMPTY,
+            &[("path", shown.to_string().as_str().into())],
+        ));
     }
     Ok(token.to_string())
 }
@@ -74,7 +97,7 @@ pub fn pkce_challenge(verifier: &str) -> String {
 
 pub fn random_token(bytes: usize) -> Result<String, String> {
     let mut buf = vec![0u8; bytes];
-    getrandom::fill(&mut buf).map_err(|_| "Rastgele sayı üretilemedi".to_string())?;
+    getrandom::fill(&mut buf).map_err(|_| t(msg::RANDOM_FAILED))?;
     Ok(URL_SAFE_NO_PAD.encode(buf))
 }
 
@@ -97,7 +120,7 @@ pub fn request_token(
     }
     response
         .json()
-        .map_err(|_| TokenError::Other("Gmail: yanıt çözülemedi".into()))
+        .map_err(|_| TokenError::Other(t(msg::RESPONSE_UNREADABLE)))
 }
 
 pub fn token_error_message(error: TokenError) -> String {
@@ -231,14 +254,14 @@ mod tests {
         let missing = dir.path().join("none.json");
         assert_eq!(
             read_client_file(&missing).err().unwrap(),
-            format!("Gmail istemci dosyası okunamadı: {}", missing.display())
+            format!("Gmail client file could not be read: {}", missing.display())
         );
         let bad = dir.path().join("bad.json");
         std::fs::write(&bad, r#"{"other":{"client_secret":"leaky"}}"#).unwrap();
         let err = read_client_file(&bad).err().unwrap();
         assert_eq!(
             err,
-            format!("Gmail istemci dosyası çözülemedi: {}", bad.display())
+            format!("Gmail client file could not be parsed: {}", bad.display())
         );
         assert!(!err.contains("leaky"));
     }
@@ -250,14 +273,14 @@ mod tests {
         std::fs::write(&path, r#"{"refresh_token":"  "}"#).unwrap();
         assert_eq!(
             read_refresh_token(&path).err().unwrap(),
-            format!("Gmail anahtar dosyası boş: {}", path.display())
+            format!("Gmail key file is empty: {}", path.display())
         );
         std::fs::write(&path, r#"{"refresh_token":" r1 \n"}"#).unwrap();
         assert_eq!(read_refresh_token(&path).unwrap(), "r1");
         std::fs::write(&path, "not json").unwrap();
         assert_eq!(
             read_refresh_token(&path).err().unwrap(),
-            format!("Gmail anahtar dosyası çözülemedi: {}", path.display())
+            format!("Gmail key file could not be parsed: {}", path.display())
         );
     }
 }

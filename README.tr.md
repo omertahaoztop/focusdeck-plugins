@@ -6,6 +6,8 @@ focusdeck için plugin'ler. Her plugin ayrı bir süreçtir ve çekirdekle satı
 
 Plugin'ler kullanıcının yetkisiyle çalışır, kum havuzu yoktur. Yalnız güvendiğin dizinlerden kur.
 
+Plugin'ler focusdeck'in `FOCUSDECK_LANG` ile ilettiği dili konuşur; doğrudan çalıştırılınca `LC_ALL`/`LC_MESSAGES`/`LANG` kullanılır. İngilizce ve Türkçe hazır gelir, başka her dil İngilizceye düşer.
+
 ## Kurulum
 
 ```
@@ -85,6 +87,10 @@ Token'ı bir kez üretmek için:
 `focusdeck plugin install gmail` ikiliyi bu yola `gmail` adıyla koyar. Kaynaktan derlediysen aynı komut `cargo run -p focusdeck-gmail -- login ...` ya da derlenen `focusdeck-gmail login ...` olur. Oturum düşerse plugin'in hata metni `focusdeck-gmail login` der, bu ikilinin kaynaktaki adıdır; kurulu ikili için yukarıdaki yolu kullan.
 
 Komut tarayıcıda açman için bir adres basar, onaydan sonra token'ı `--token-file` yoluna `0600` izinle yazar.
+
+## Çeviri
+
+Her plugin metinlerini `plugins/<ad>/locales/` altında tutar. Yeni dil eklemek için `en.ftl` dosyasını `plugins/<ad>/locales/<kod>.ftl` olarak kopyala (örneğin `de.ftl`) ve değerleri çevir. Mesaj kimliklerine ve `{ $ad }` yer tutucularına dokunma. `cargo test`, dil dosyasında kimlik eksikse, fazlaysa ya da yer tutucular `en.ftl` ile uyuşmuyorsa başarısız olur. Bir dilde olmayan mesaj İngilizce gösterilir.
 
 ## Sürüm alma
 

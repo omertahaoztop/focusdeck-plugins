@@ -1,0 +1,15 @@
+not-configured = Zulip is not configured
+invalid-settings = Invalid settings: { $error }
+key-file-unreadable = Zulip key file could not be read: { $path }
+key-file-empty = Zulip key file is empty: { $path }
+invalid-id = Invalid id: { $id }
+unknown-action = Unknown action: { $action }
+http-client-failed = Could not set up the HTTP client
+key-rejected = Zulip: key rejected
+response-unreadable = Zulip: could not parse the response
+timed-out = Zulip: timed out
+connect-failed = Zulip: could not connect
+request-failed = Zulip: request failed
+http-status = Zulip: HTTP { $status }
+private-subtitle = { $sender } · private
+empty-title = (empty message)

@@ -1,7 +1,7 @@
 [package]
 name = "focusdeck-vikunja"
 version = "0.1.0"
-description = "Vikunja projesindeki görevleri listeler, taşır ve not alır"
+description = "Open tasks of a Vikunja project"
 edition.workspace = true
 license.workspace = true
 

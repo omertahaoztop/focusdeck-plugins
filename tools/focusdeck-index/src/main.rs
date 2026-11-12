@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 use focusdeck_index::{Entry, Target, check_tag, set_entry};
 
 #[derive(Parser)]
-#[command(about = "focusdeck plugin dizinini günceller")]
+#[command(about = "Updates the focusdeck plugin index")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -14,7 +14,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Bir plugin girdisini dizine yazar ya da değiştirir
+    /// Writes or replaces one plugin entry in the index
     Set {
         #[arg(long)]
         index: PathBuf,
@@ -24,11 +24,11 @@ enum Command {
         description: String,
         #[arg(long)]
         version: String,
-        /// <üçlü>=<url>,<sha256>
+        /// <triple>=<url>,<sha256>
         #[arg(long = "target", required = true)]
         targets: Vec<String>,
     },
-    /// Etiketin <ad>-v<sürüm> ile uyuştuğunu denetler
+    /// Checks that the tag matches <name>-v<version>
     CheckTag {
         #[arg(long)]
         tag: String,
@@ -40,7 +40,7 @@ enum Command {
 }
 
 fn parse_target(spec: &str) -> Result<(String, Target), String> {
-    let bad = || format!("Hedef <üçlü>=<url>,<sha256> biçiminde olmalı: {spec}");
+    let bad = || format!("Target must look like <triple>=<url>,<sha256>: {spec}");
     let (triple, rest) = spec.split_once('=').ok_or_else(bad)?;
     let (url, sha256) = rest.rsplit_once(',').ok_or_else(bad)?;
     Ok((
@@ -65,11 +65,11 @@ fn run(command: Command) -> Result<(), String> {
             for spec in &targets {
                 let (triple, target) = parse_target(spec)?;
                 if parsed.insert(triple.clone(), target).is_some() {
-                    return Err(format!("Hedef iki kez verilmiş: {triple}"));
+                    return Err(format!("Target given twice: {triple}"));
                 }
             }
             let current = std::fs::read_to_string(&index)
-                .map_err(|e| format!("{} okunamadı: {e}", index.display()))?;
+                .map_err(|e| format!("Could not read {}: {e}", index.display()))?;
             let entry = Entry {
                 name,
                 description,
@@ -78,7 +78,7 @@ fn run(command: Command) -> Result<(), String> {
             };
             let updated = set_entry(&current, entry)?;
             std::fs::write(&index, updated)
-                .map_err(|e| format!("{} yazılamadı: {e}", index.display()))
+                .map_err(|e| format!("Could not write {}: {e}", index.display()))
         }
         Command::CheckTag { tag, name, version } => check_tag(&tag, &name, &version),
     }
