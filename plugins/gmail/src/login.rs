@@ -14,6 +14,7 @@ use crate::oauth::{
 
 const SCOPE: &str = "https://www.googleapis.com/auth/gmail.readonly";
 const CALLBACK_TIMEOUT: Duration = Duration::from_secs(300);
+const HEAD_BUDGET: Duration = Duration::from_secs(2);
 const MAX_REQUEST_BYTES: u64 = 16 * 1024;
 
 pub struct LoginArgs {
@@ -90,14 +91,25 @@ pub fn parse_request_line(line: &str) -> Option<Callback> {
     Some(callback)
 }
 
-pub fn check_callback(callback: Callback, expected_state: &str) -> Result<String, String> {
+#[derive(Debug, PartialEq, Eq)]
+pub enum Verdict {
+    Approved(String),
+    Denied,
+    Foreign,
+}
+
+// only a callback carrying our state comes from the sign-in we started, so only that one may end the wait
+pub fn check_callback(callback: Callback, expected_state: &str) -> Verdict {
+    if callback.state.as_deref() != Some(expected_state) {
+        return Verdict::Foreign;
+    }
     match callback {
         Callback {
             code: Some(code),
-            state: Some(state),
             error: None,
-        } if state == expected_state => Ok(code),
-        _ => Err(t(msg::DENIED)),
+            ..
+        } => Verdict::Approved(code),
+        _ => Verdict::Denied,
     }
 }
 
@@ -112,7 +124,7 @@ pub fn wait_for_callback(
     let deadline = Instant::now() + timeout;
     loop {
         if Instant::now() >= deadline {
-            return Err(t(msg::APPROVAL_TIMEOUT));
+            return Err(timeout_message(timeout));
         }
         match listener.accept() {
             Ok((stream, _)) => {
@@ -129,13 +141,15 @@ pub fn wait_for_callback(
     }
 }
 
+fn timeout_message(timeout: Duration) -> String {
+    let minutes = i64::try_from(timeout.as_secs().div_ceil(60).max(1)).unwrap_or(i64::MAX);
+    t_args(msg::APPROVAL_TIMEOUT, &[("minutes", minutes.into())])
+}
+
 fn serve_connection(stream: TcpStream, expected_state: &str) -> Option<Result<String, String>> {
     stream.set_nonblocking(false).ok()?;
-    stream.set_read_timeout(Some(Duration::from_secs(2))).ok()?;
-    stream
-        .set_write_timeout(Some(Duration::from_secs(2)))
-        .ok()?;
-    let line = read_request_head(&stream)?;
+    stream.set_write_timeout(Some(HEAD_BUDGET)).ok()?;
+    let line = read_request_head(&stream, HEAD_BUDGET)?;
     let callback = match parse_request_line(&line) {
         Some(cb) if cb.code.is_some() || cb.error.is_some() => cb,
         _ => {
@@ -143,16 +157,46 @@ fn serve_connection(stream: TcpStream, expected_state: &str) -> Option<Result<St
             return None;
         }
     };
-    let result = check_callback(callback, expected_state);
-    match &result {
-        Ok(_) => respond(stream, "200 OK", &t(msg::CONNECTED_PAGE)),
-        Err(_) => respond(stream, "200 OK", &t(msg::DENIED_PAGE)),
+    match check_callback(callback, expected_state) {
+        Verdict::Approved(code) => {
+            respond(stream, "200 OK", &t(msg::CONNECTED_PAGE));
+            Some(Ok(code))
+        }
+        Verdict::Denied => {
+            respond(stream, "200 OK", &t(msg::DENIED_PAGE));
+            Some(Err(t(msg::DENIED)))
+        }
+        Verdict::Foreign => {
+            respond(stream, "400 Bad Request", &t(msg::FOREIGN_PAGE));
+            None
+        }
     }
-    Some(result)
 }
 
-fn read_request_head(stream: &TcpStream) -> Option<String> {
-    let mut reader = BufReader::new(stream.take(MAX_REQUEST_BYTES));
+struct Budgeted<'a> {
+    stream: &'a TcpStream,
+    deadline: Instant,
+}
+
+impl Read for Budgeted<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let left = self
+            .deadline
+            .checked_duration_since(Instant::now())
+            .filter(|left| !left.is_zero())
+            .ok_or(io::ErrorKind::TimedOut)?;
+        self.stream.set_read_timeout(Some(left))?;
+        self.stream.read(buf)
+    }
+}
+
+// connections are served one at a time, so the budget covers the whole head rather than each read
+fn read_request_head(stream: &TcpStream, budget: Duration) -> Option<String> {
+    let budgeted = Budgeted {
+        stream,
+        deadline: Instant::now() + budget,
+    };
+    let mut reader = BufReader::new(budgeted.take(MAX_REQUEST_BYTES));
     let mut first = String::new();
     reader.read_line(&mut first).ok()?;
     let mut header = String::new();
@@ -195,6 +239,9 @@ pub fn run(args: LoginArgs) -> Result<(), String> {
 
 pub fn run_with(args: LoginArgs, announce: impl FnOnce(&str)) -> Result<(), String> {
     let secret = read_client_file(&args.client_file)?;
+    if !secret.desktop {
+        return Err(t(msg::LOGIN_NEEDS_DESKTOP_CLIENT));
+    }
     let verifier = random_token(32)?;
     let state = random_token(16)?;
     let listener =
@@ -205,10 +252,7 @@ pub fn run_with(args: LoginArgs, announce: impl FnOnce(&str)) -> Result<(), Stri
         .port();
     let redirect_uri = format!("http://127.0.0.1:{port}/");
 
-    let mut auth_url = Url::parse(&secret.auth_uri)
-        .ok()
-        .filter(|u| matches!(u.scheme(), "https" | "http"))
-        .ok_or_else(|| t(msg::AUTH_URI_INVALID))?;
+    let mut auth_url = secret.auth_uri.clone();
     {
         let challenge = pkce_challenge(&verifier);
         let mut query = auth_url.query_pairs_mut();
@@ -238,7 +282,8 @@ pub fn run_with(args: LoginArgs, announce: impl FnOnce(&str)) -> Result<(), Stri
         ("code_verifier", verifier.as_str()),
         ("redirect_uri", redirect_uri.as_str()),
     ];
-    let response = request_token(&http()?, &secret, &grant).map_err(token_error_message)?;
+    let response = request_token(&http(&[&secret.token_uri])?, &secret, &grant)
+        .map_err(token_error_message)?;
     let refresh_token = response
         .refresh_token
         .filter(|t| !t.trim().is_empty())
@@ -259,6 +304,8 @@ mod tests {
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
     use std::time::Duration;
+
+    use proptest::prelude::*;
 
     use super::*;
 
@@ -285,24 +332,50 @@ mod tests {
     }
 
     #[test]
-    fn mismatched_state_is_rejected() {
-        let cb = parse_request_line("GET /?code=abc&state=other HTTP/1.1").unwrap();
+    fn only_a_callback_with_our_state_counts() {
+        let verdict = |line: &str| check_callback(parse_request_line(line).unwrap(), "xyz");
         assert_eq!(
-            check_callback(cb, "xyz").unwrap_err(),
-            "authorization denied"
+            verdict("GET /?code=abc&state=xyz HTTP/1.1"),
+            Verdict::Approved("abc".into())
         );
-        let no_state = parse_request_line("GET /?code=abc HTTP/1.1").unwrap();
         assert_eq!(
-            check_callback(no_state, "xyz").unwrap_err(),
-            "authorization denied"
+            verdict("GET /?error=access_denied&state=xyz HTTP/1.1"),
+            Verdict::Denied
         );
-        let denied = parse_request_line("GET /?error=access_denied&state=xyz HTTP/1.1").unwrap();
         assert_eq!(
-            check_callback(denied, "xyz").unwrap_err(),
-            "authorization denied"
+            verdict("GET /?code=abc&error=x&state=xyz HTTP/1.1"),
+            Verdict::Denied
         );
-        let good = parse_request_line("GET /?code=abc&state=xyz HTTP/1.1").unwrap();
-        assert_eq!(check_callback(good, "xyz").unwrap(), "abc");
+        assert_eq!(verdict("GET /?state=xyz&error= HTTP/1.1"), Verdict::Denied);
+        for line in [
+            "GET /?code=abc&state=other HTTP/1.1",
+            "GET /?code=abc HTTP/1.1",
+            "GET /?error=access_denied HTTP/1.1",
+            "GET /?error=access_denied&state= HTTP/1.1",
+        ] {
+            assert_eq!(verdict(line), Verdict::Foreign, "{line}");
+        }
+    }
+
+    #[test]
+    fn a_client_that_trickles_its_request_is_dropped_within_the_budget() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let slow = std::thread::spawn(move || {
+            let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+            for _ in 0..100 {
+                if stream.write_all(b"G").is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        });
+        let (stream, _) = listener.accept().unwrap();
+        let started = Instant::now();
+        assert_eq!(read_request_head(&stream, Duration::from_millis(200)), None);
+        assert!(started.elapsed() < Duration::from_millis(1500));
+        drop(stream);
+        slow.join().unwrap();
     }
 
     fn request(port: u16, line: &str) -> String {
@@ -337,7 +410,38 @@ mod tests {
     fn missing_callback_times_out() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let err = wait_for_callback(&listener, "xyz", Duration::from_millis(200)).unwrap_err();
-        assert_eq!(err, "No approval within 5 minutes");
+        assert_eq!(err, "No approval within 1 min, run login again");
+    }
+
+    #[test]
+    fn timeout_message_names_the_real_wait() {
+        assert_eq!(
+            timeout_message(CALLBACK_TIMEOUT),
+            "No approval within 5 min, run login again"
+        );
+        assert_eq!(
+            timeout_message(Duration::from_secs(61)),
+            "No approval within 2 min, run login again"
+        );
+    }
+
+    proptest! {
+        #[test]
+        fn request_line_parsing_survives_any_input(line in any::<String>()) {
+            let _ = parse_request_line(&line);
+        }
+
+        #[test]
+        fn code_and_state_survive_url_encoding(code in any::<String>(), state in any::<String>()) {
+            let mut url = Url::parse("http://localhost/").unwrap();
+            url.query_pairs_mut()
+                .append_pair("code", &code)
+                .append_pair("state", &state);
+            let line = format!("GET /?{} HTTP/1.1", url.query().unwrap());
+            let callback = parse_request_line(&line).unwrap();
+            prop_assert_eq!(callback.code.as_deref(), Some(code.as_str()));
+            prop_assert_eq!(callback.state.as_deref(), Some(state.as_str()));
+        }
     }
 
     #[test]

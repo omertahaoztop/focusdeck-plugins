@@ -1,7 +1,9 @@
+use std::collections::HashSet;
 use std::time::Duration;
 
+use focusdeck_plugin_common::{StatusReason, Transport, http_client, null_as_default};
 use reqwest::StatusCode;
-use reqwest::blocking::{Client as Http, RequestBuilder};
+use reqwest::blocking::{Client as Http, RequestBuilder, Response};
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer};
@@ -12,14 +14,6 @@ use crate::i18n::{msg, t, t_args};
 const KANBAN_KIND: u64 = 3;
 const PER_PAGE: usize = 200;
 const MAX_PAGES: usize = 1000;
-
-fn null_as_default<'de, D, T>(d: D) -> Result<T, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Deserialize<'de> + Default,
-{
-    Ok(Option::<T>::deserialize(d)?.unwrap_or_default())
-}
 
 fn kind_is_kanban<'de, D: Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
     Ok(match Value::deserialize(d)? {
@@ -98,35 +92,44 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(base_url: &str, token: &str) -> Result<Self, String> {
+    pub fn new(base: &str, token: &str) -> Result<Self, String> {
         let mut auth = HeaderValue::from_str(&format!("Bearer {token}"))
             .map_err(|_| t(msg::TOKEN_INVALID_CHARS))?;
         auth.set_sensitive(true);
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, auth);
-        let http = Http::builder()
-            .default_headers(headers)
-            .user_agent(concat!("focusdeck-vikunja/", env!("CARGO_PKG_VERSION")))
-            .timeout(Duration::from_secs(10))
-            .build()
-            .map_err(|_| t(msg::HTTP_CLIENT_FAILED))?;
+        let http = http_client(
+            concat!("focusdeck-vikunja/", env!("CARGO_PKG_VERSION")),
+            Duration::from_secs(10),
+            &[base],
+        )
+        .default_headers(headers)
+        .build()
+        .map_err(|_| t(msg::HTTP_CLIENT_FAILED))?;
         Ok(Self {
             http,
-            api: format!("{}/api/v1", base_url.trim_end_matches('/')),
+            api: format!("{base}/api/v1"),
         })
     }
 
-    fn send(&self, request: RequestBuilder) -> Result<Value, String> {
-        let response = request.send().map_err(transport_error)?;
+    fn dispatch(request: RequestBuilder) -> Result<Response, String> {
+        request.send().map_err(|e| transport_error(&e))
+    }
+
+    fn body(response: Response) -> Result<Value, String> {
         let status = response.status();
         if !status.is_success() {
-            return Err(status_error(status));
+            return Err(status_error(status.as_u16()));
         }
-        let body = response.text().map_err(transport_error)?;
+        let body = response.text().map_err(|e| transport_error(&e))?;
         if body.trim().is_empty() {
             return Ok(Value::Null);
         }
         serde_json::from_str(&body).map_err(|_| t(msg::RESPONSE_UNREADABLE))
+    }
+
+    fn send(&self, request: RequestBuilder) -> Result<Value, String> {
+        Self::body(Self::dispatch(request)?)
     }
 
     fn typed<T: DeserializeOwned>(value: Value) -> Result<T, String> {
@@ -157,14 +160,11 @@ impl Client {
     // the server may cap per_page below ours, so only an empty or repeated page ends the listing
     pub fn projects(&self) -> Result<Vec<Project>, String> {
         let mut all: Vec<Project> = Vec::new();
+        let mut seen = HashSet::new();
         for page in 1..=MAX_PAGES {
             let batch: Vec<Project> = self.get_page("/projects", page)?;
             let known = all.len();
-            for project in batch {
-                if all.iter().all(|p| p.id != project.id) {
-                    all.push(project);
-                }
-            }
+            all.extend(batch.into_iter().filter(|p| seen.insert(p.id)));
             if all.len() == known {
                 break;
             }
@@ -184,6 +184,7 @@ impl Client {
     pub fn view_tasks(&self, project: u64, view: u64) -> Result<Vec<Bucket>, String> {
         let path = format!("/projects/{project}/views/{view}/tasks");
         let mut merged: Vec<Bucket> = Vec::new();
+        let mut seen: Vec<HashSet<u64>> = Vec::new();
         for page in 1..=MAX_PAGES {
             let batch: Vec<Bucket> = self.get_page(&path, page)?;
             let mut grew = false;
@@ -194,22 +195,21 @@ impl Client {
                     None => {
                         merged.push(Bucket {
                             id: bucket.id,
-                            title: bucket.title.clone(),
+                            title: bucket.title,
                             tasks: Vec::new(),
                             count: bucket.count,
                         });
+                        seen.push(HashSet::new());
                         merged.len() - 1
                     }
                 };
                 let have = &mut merged[at];
+                let known = &mut seen[at];
                 let returned = bucket.tasks.len();
-                let fresh: Vec<Task> = bucket
-                    .tasks
-                    .into_iter()
-                    .filter(|t| have.tasks.iter().all(|known| known.id != t.id))
-                    .collect();
-                grew |= !fresh.is_empty();
-                have.tasks.extend(fresh);
+                let before = have.tasks.len();
+                have.tasks
+                    .extend(bucket.tasks.into_iter().filter(|t| known.insert(t.id)));
+                grew |= have.tasks.len() > before;
                 let total = usize::try_from(bucket.count).unwrap_or(usize::MAX);
                 more |= if total > 0 {
                     total > have.tasks.len()
@@ -226,6 +226,19 @@ impl Client {
 
     pub fn get_task_raw(&self, id: u64) -> Result<Value, String> {
         self.get(&format!("/tasks/{id}"), &[])
+    }
+
+    /// A task that is missing or not ours to read is reported as absent rather than as a failure.
+    pub fn find_task_raw(&self, id: u64) -> Result<Option<Value>, String> {
+        let url = format!("{}/tasks/{id}", self.api);
+        let response = Self::dispatch(self.http.get(url))?;
+        if matches!(
+            response.status(),
+            StatusCode::FORBIDDEN | StatusCode::NOT_FOUND
+        ) {
+            return Ok(None);
+        }
+        Self::body(response).map(Some)
     }
 
     pub fn create_task(&self, project: u64, body: &Value) -> Result<Task, String> {
@@ -284,31 +297,29 @@ impl Client {
     }
 }
 
-fn transport_error(e: reqwest::Error) -> String {
-    if e.is_timeout() {
-        t(msg::TIMED_OUT)
-    } else if e.is_connect() {
-        t(msg::CONNECT_FAILED)
-    } else {
-        t(msg::REQUEST_FAILED)
-    }
+fn transport_error(error: &reqwest::Error) -> String {
+    t(match Transport::of(error) {
+        Transport::TimedOut => msg::TIMED_OUT,
+        Transport::Connect => msg::CONNECT_FAILED,
+        Transport::Other => msg::REQUEST_FAILED,
+    })
 }
 
-fn status_error(status: StatusCode) -> String {
-    let reason = match status.as_u16() {
-        400 => msg::HTTP_BAD_REQUEST,
-        401 => msg::HTTP_UNAUTHORIZED,
-        403 => msg::HTTP_FORBIDDEN,
-        404 => msg::HTTP_NOT_FOUND,
-        429 => msg::HTTP_RATE_LIMITED,
-        500..=599 => msg::HTTP_SERVER_ERROR,
-        _ => msg::HTTP_UNEXPECTED,
+fn status_error(status: u16) -> String {
+    let reason = match StatusReason::of(status) {
+        StatusReason::Redirected => msg::HTTP_REDIRECTED,
+        StatusReason::BadRequest => msg::HTTP_BAD_REQUEST,
+        StatusReason::Unauthorized => msg::HTTP_UNAUTHORIZED,
+        StatusReason::Forbidden => msg::HTTP_FORBIDDEN,
+        StatusReason::NotFound => msg::HTTP_NOT_FOUND,
+        StatusReason::RateLimited => msg::HTTP_RATE_LIMITED,
+        StatusReason::ServerError => msg::HTTP_SERVER_ERROR,
+        StatusReason::Unexpected => msg::HTTP_UNEXPECTED,
     };
-    let code = status.as_u16().to_string();
     t_args(
         msg::HTTP_STATUS,
         &[
-            ("status", code.as_str().into()),
+            ("status", i64::from(status).into()),
             ("reason", t(reason).as_str().into()),
         ],
     )

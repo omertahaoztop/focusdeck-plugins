@@ -237,17 +237,106 @@ fn unknown_action_is_error() {
 }
 
 #[test]
-fn http_error_names_only_the_status() {
+fn http_error_names_the_status_and_reason_only() {
+    let cases = [
+        (400, "Zulip 400: invalid request"),
+        (403, "Zulip 403: no permission"),
+        (404, "Zulip 404: not found"),
+        (429, "Zulip 429: too many requests"),
+        (500, "Zulip 500: server error"),
+        (418, "Zulip 418: unexpected response"),
+    ];
+    for (status, expected) in cases {
+        let mut server = mockito::Server::new();
+        let (mut plugin, _file, _me) = configured(&mut server);
+        server
+            .mock("GET", "/api/v1/messages")
+            .match_query(Matcher::Any)
+            .with_status(status)
+            .with_body(format!("secret body {KEY}"))
+            .create();
+        assert_eq!(list(&mut plugin).unwrap_err(), expected);
+    }
+}
+
+#[test]
+fn redirect_is_reported_and_not_followed() {
     let mut server = mockito::Server::new();
     let (mut plugin, _file, _me) = configured(&mut server);
+    let elsewhere = server.mock("GET", "/elsewhere").expect(0).create();
     server
         .mock("GET", "/api/v1/messages")
         .match_query(Matcher::Any)
-        .with_status(500)
-        .with_body(format!("secret body {KEY}"))
+        .with_status(302)
+        .with_header("location", "/elsewhere")
         .create();
-    let err = list(&mut plugin).unwrap_err();
-    assert_eq!(err, "Zulip: HTTP 500");
+    assert_eq!(
+        list(&mut plugin).unwrap_err(),
+        "Zulip 302: redirected, check the url"
+    );
+    elsewhere.assert();
+}
+
+#[test]
+fn plain_http_to_another_machine_is_refused_before_any_request() {
+    let file = keyfile(KEY);
+    let configure = |url: &str| {
+        Zulip::default()
+            .configure(json!({
+                "url": url, "email": EMAIL, "key_file": file.path().to_str().unwrap(),
+            }))
+            .unwrap_err()
+    };
+    assert_eq!(
+        configure("http://zulip.example.com"),
+        "Zulip: url must use https (plain http only works for localhost)"
+    );
+    assert_eq!(configure("zulip.example.com"), "Zulip: url is invalid");
+}
+
+#[test]
+fn hostile_characters_are_stripped_from_shown_text() {
+    let hostile = message(json!({
+        "id": 1, "content": "\u{1b}[2J\n> \u{202e}merhaba\u{7}", "type": "stream",
+        "sender_full_name": "Ay\u{1b}şe", "display_recipient": "ge\u{202e}nel",
+        "subject": "duyuru\u{9b}lar",
+    }));
+    let item = to_item(&hostile, "https://zulip.example.com");
+    assert_eq!(item.title, "[2J");
+    assert_eq!(item.subtitle.as_deref(), Some("Ayşe · #genel > duyurular"));
+    let private = message(json!({
+        "id": 2, "content": "\u{202e}", "type": "private",
+        "sender_full_name": "A\u{2066}li", "display_recipient": [], "subject": "",
+    }));
+    let item = to_item(&private, "https://zulip.example.com");
+    assert_eq!(item.title, "(empty message)");
+    assert_eq!(item.subtitle.as_deref(), Some("Ali · private"));
+}
+
+#[test]
+fn a_server_that_never_reports_the_oldest_message_is_cut_off() {
+    let mut server = mockito::Server::new();
+    let (mut plugin, _file, _me) = configured(&mut server);
+    let endless = server
+        .mock("GET", "/api/v1/messages")
+        .match_query(Matcher::Any)
+        .with_body_from_request(|request| {
+            let url =
+                reqwest::Url::parse(&format!("http://x{}", request.path_and_query())).unwrap();
+            let anchor = url
+                .query_pairs()
+                .find(|(key, _)| key == "anchor")
+                .map(|(_, value)| value.into_owned())
+                .unwrap();
+            let id = anchor.parse::<u64>().map_or(1_000_000, |a| a - 1);
+            json!({"result": "success", "messages": [stream_msg(id, "x")], "found_oldest": false})
+                .to_string()
+                .into_bytes()
+        })
+        .expect(100)
+        .create();
+    assert_eq!(list(&mut plugin).unwrap().len(), 100);
+    endless.assert();
 }
 
 #[test]
@@ -262,7 +351,7 @@ fn rejected_key_fails_configure() {
     let err = Zulip::default()
         .configure(config(&server, &file))
         .unwrap_err();
-    assert_eq!(err, "Zulip: key rejected");
+    assert_eq!(err, "Zulip 401: key rejected");
     assert!(!err.contains(KEY));
 }
 

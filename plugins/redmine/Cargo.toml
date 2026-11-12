@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 chrono.workspace = true
 focusdeck-i18n = { git = "https://github.com/omertahaoztop/focusdeck", tag = "v0.2.0" }
+focusdeck-plugin-common.workspace = true
 focusdeck-protocol = { git = "https://github.com/omertahaoztop/focusdeck", tag = "v0.2.0" }
 reqwest.workspace = true
 serde.workspace = true

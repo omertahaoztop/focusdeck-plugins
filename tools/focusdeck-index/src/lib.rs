@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use semver::Version;
 use serde::{Deserialize, Serialize};
 
 const PROTOCOL: u32 = 1;
@@ -44,13 +45,12 @@ fn is_identifier(text: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
-fn validate(entry: &Entry) -> Result<(), String> {
+fn validate(entry: &Entry) -> Result<Version, String> {
     if !is_identifier(&entry.name) {
         return Err(format!("Invalid plugin name: {}", entry.name));
     }
-    if entry.version.is_empty() {
-        return Err("Version is empty".into());
-    }
+    let version = Version::parse(&entry.version)
+        .map_err(|_| format!("Version is not semver: {}", entry.version))?;
     if entry.targets.is_empty() {
         return Err("Target list is empty".into());
     }
@@ -72,13 +72,28 @@ fn validate(entry: &Entry) -> Result<(), String> {
             ));
         }
     }
-    Ok(())
+    Ok(version)
 }
 
 pub fn set_entry(index: &str, entry: Entry) -> Result<String, String> {
-    validate(&entry)?;
+    let version = validate(&entry)?;
     let mut parsed: Index =
         toml::from_str(index).map_err(|e| format!("Could not read the index: {}", e.message()))?;
+    if let Some(published) = parsed.plugin.iter().find(|p| p.name == entry.name) {
+        let current = Version::parse(&published.version).map_err(|_| {
+            format!(
+                "Published version of {} is not semver: {}",
+                entry.name, published.version
+            )
+        })?;
+        // a re-run of the same tag is fine, an older tag must not replace what clients already trust
+        if version.cmp_precedence(&current).is_lt() {
+            return Err(format!(
+                "{} {} is older than the published {}",
+                entry.name, entry.version, published.version
+            ));
+        }
+    }
     parsed.plugin.retain(|p| p.name != entry.name);
     parsed.plugin.push(Stored {
         name: entry.name,
@@ -244,6 +259,49 @@ mod tests {
         let target = e.targets.remove(ARM).unwrap();
         e.targets.insert("arm 64".into(), target);
         assert!(set_entry("", e).is_err());
+    }
+
+    #[test]
+    fn rejects_versions_that_are_not_semver() {
+        for bad in ["", "1", "1.0", "v1.0.0", "1.0.0 ", "latest", "01.0.0"] {
+            let err = set_entry("", entry("redmine", bad)).unwrap_err();
+            assert_eq!(err, format!("Version is not semver: {bad}"));
+        }
+        for good in ["0.1.0", "1.2.3-rc.1", "1.2.3+build.5"] {
+            assert!(set_entry("", entry("redmine", good)).is_ok(), "{good}");
+        }
+    }
+
+    #[test]
+    fn refuses_to_move_a_plugin_backwards() {
+        let published = set_entry("", entry("redmine", "0.2.0")).unwrap();
+        for older in ["0.1.9", "0.2.0-rc.1", "0.0.1"] {
+            let err = set_entry(&published, entry("redmine", older)).unwrap_err();
+            assert_eq!(
+                err,
+                format!("redmine {older} is older than the published 0.2.0")
+            );
+        }
+        let rerun = set_entry(&published, entry("redmine", "0.2.0")).unwrap();
+        assert_eq!(rerun, published);
+        let newer = set_entry(&published, entry("redmine", "0.10.0")).unwrap();
+        assert_eq!(parse(&newer).plugin[0].version, "0.10.0");
+        assert!(set_entry(&published, entry("zulip", "0.1.0")).is_ok());
+    }
+
+    #[test]
+    fn build_metadata_does_not_make_a_version_older() {
+        let published = set_entry("", entry("redmine", "1.2.3+build.5")).unwrap();
+        assert!(set_entry(&published, entry("redmine", "1.2.3")).is_ok());
+    }
+
+    #[test]
+    fn refuses_an_index_whose_published_version_is_unreadable() {
+        let published = set_entry("", entry("redmine", "0.2.0"))
+            .unwrap()
+            .replace("0.2.0", "newest");
+        let err = set_entry(&published, entry("redmine", "0.3.0")).unwrap_err();
+        assert_eq!(err, "Published version of redmine is not semver: newest");
     }
 
     #[test]

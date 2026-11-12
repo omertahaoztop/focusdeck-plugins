@@ -1,4 +1,5 @@
 use focusdeck_i18n::Localizer;
+use focusdeck_plugin_common::{SecretError, UrlError, checked_base, printable, read_secret};
 use focusdeck_protocol::{ActionParams, Describe, Item, ListParams, PROTOCOL_VERSION, Plugin};
 use serde::Deserialize;
 use serde_json::Value;
@@ -42,25 +43,22 @@ impl Plugin for Zulip {
                 &[("error", e.to_string().as_str().into())],
             )
         })?;
-        let key = std::fs::read_to_string(&cfg.key_file).map_err(|_| {
-            t_args(
-                msg::KEY_FILE_UNREADABLE,
-                &[("path", cfg.key_file.as_str().into())],
-            )
+        let base = checked_base(&cfg.url).map_err(|e| {
+            t(match e {
+                UrlError::Invalid => msg::URL_INVALID,
+                UrlError::Insecure => msg::URL_INSECURE,
+            })
         })?;
-        let key = key.trim();
-        if key.is_empty() {
-            return Err(t_args(
-                msg::KEY_FILE_EMPTY,
-                &[("path", cfg.key_file.as_str().into())],
-            ));
-        }
-        let client = Client::new(&cfg.url, &cfg.email, key)?;
+        let key = read_secret(&cfg.key_file).map_err(|e| {
+            let id = match e {
+                SecretError::Unreadable => msg::KEY_FILE_UNREADABLE,
+                SecretError::Empty => msg::KEY_FILE_EMPTY,
+            };
+            t_args(id, &[("path", cfg.key_file.as_str().into())])
+        })?;
+        let client = Client::new(&base, &cfg.email, &key)?;
         client.me()?;
-        self.target = Some(Target {
-            client,
-            base: cfg.url,
-        });
+        self.target = Some(Target { client, base });
         Ok(())
     }
 
@@ -96,17 +94,12 @@ pub fn to_item(message: &Message, base: &str) -> Item {
 
 pub fn to_item_in(localizer: &Localizer, message: &Message, base: &str) -> Item {
     let base = base.trim_end_matches('/');
+    let sender = printable(&message.sender_full_name);
     let subtitle = if message.kind == "private" {
-        localizer.t_args(
-            msg::PRIVATE_SUBTITLE,
-            &[("sender", message.sender_full_name.as_str().into())],
-        )
+        localizer.t_args(msg::PRIVATE_SUBTITLE, &[("sender", sender.as_str().into())])
     } else {
-        let stream = message.display_recipient.as_str().unwrap_or_default();
-        format!(
-            "{} · #{stream} > {}",
-            message.sender_full_name, message.subject
-        )
+        let stream = printable(message.display_recipient.as_str().unwrap_or_default());
+        format!("{sender} · #{stream} > {}", printable(&message.subject))
     };
     Item {
         id: message.id.to_string(),
@@ -126,8 +119,7 @@ pub fn to_item_in(localizer: &Localizer, message: &Message, base: &str) -> Item 
 fn title_of(localizer: &Localizer, content: &str) -> String {
     content
         .lines()
-        .map(|line| line.trim_start_matches(|c: char| c == '>' || c.is_whitespace()))
-        .map(str::trim_end)
+        .map(|line| printable(line.trim_start_matches(|c: char| c == '>' || c.is_whitespace())))
         .find(|line| !line.is_empty())
-        .map_or_else(|| localizer.t(msg::EMPTY_TITLE), str::to_string)
+        .unwrap_or_else(|| localizer.t(msg::EMPTY_TITLE))
 }

@@ -9,6 +9,7 @@ license.workspace = true
 base64.workspace = true
 chrono.workspace = true
 focusdeck-i18n = { git = "https://github.com/omertahaoztop/focusdeck", tag = "v0.2.0" }
+focusdeck-plugin-common.workspace = true
 focusdeck-protocol = { git = "https://github.com/omertahaoztop/focusdeck", tag = "v0.2.0" }
 getrandom.workspace = true
 reqwest = { workspace = true, features = ["form"] }
@@ -21,4 +22,5 @@ focusdeck-i18n = { git = "https://github.com/omertahaoztop/focusdeck", tag = "v0
 
 [dev-dependencies]
 mockito.workspace = true
+proptest.workspace = true
 tempfile.workspace = true

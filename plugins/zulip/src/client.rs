@@ -1,23 +1,16 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use reqwest::StatusCode;
+use focusdeck_plugin_common::{StatusReason, Transport, http_client, null_as_default};
 use reqwest::blocking::{Client as Http, RequestBuilder, Response};
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use serde_json::Value;
 
 use crate::i18n::{msg, t, t_args};
 
 const BATCH: &str = "1000";
+const MAX_PAGES: usize = 100;
 const STARRED_NARROW: &str = r#"[{"operator":"is","operand":"starred"}]"#;
-
-fn null_as_default<'de, D, T>(d: D) -> Result<T, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Deserialize<'de> + Default,
-{
-    Ok(Option::<T>::deserialize(d)?.unwrap_or_default())
-}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Message {
@@ -50,42 +43,36 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(base_url: &str, email: &str, key: &str) -> Result<Self, String> {
-        let http = Http::builder()
-            .user_agent(concat!("focusdeck-zulip/", env!("CARGO_PKG_VERSION")))
-            .timeout(Duration::from_secs(15))
-            .build()
-            .map_err(|_| t(msg::HTTP_CLIENT_FAILED))?;
+    pub fn new(base: &str, email: &str, key: &str) -> Result<Self, String> {
+        let http = http_client(
+            concat!("focusdeck-zulip/", env!("CARGO_PKG_VERSION")),
+            Duration::from_secs(15),
+            &[base],
+        )
+        .build()
+        .map_err(|_| t(msg::HTTP_CLIENT_FAILED))?;
         Ok(Self {
             http,
-            base: base_url.trim_end_matches('/').to_string(),
+            base: base.to_string(),
             email: email.to_string(),
             key: key.to_string(),
         })
     }
 
     fn send(&self, request: RequestBuilder) -> Result<Response, String> {
-        request
+        let response = request
             .basic_auth(&self.email, Some(&self.key))
             .send()
-            .map_err(transport_error)
-    }
-
-    fn send_ok(&self, request: RequestBuilder) -> Result<Response, String> {
-        let response = self.send(request)?;
+            .map_err(|e| transport_error(&e))?;
         match response.status() {
             status if status.is_success() => Ok(response),
-            status => Err(status_error(status)),
+            status => Err(status_error(status.as_u16())),
         }
     }
 
     pub fn me(&self) -> Result<(), String> {
-        let response = self.send(self.http.get(format!("{}/api/v1/users/me", self.base)))?;
-        match response.status() {
-            StatusCode::UNAUTHORIZED => Err(t(msg::KEY_REJECTED)),
-            status if status.is_success() => Ok(()),
-            status => Err(status_error(status)),
-        }
+        self.send(self.http.get(format!("{}/api/v1/users/me", self.base)))
+            .map(drop)
     }
 
     // pages walk backwards from the newest message until the server reports the oldest one
@@ -93,7 +80,7 @@ impl Client {
         let mut all: Vec<Message> = Vec::new();
         let mut seen = HashSet::new();
         let mut anchor = "newest".to_string();
-        loop {
+        for _ in 0..MAX_PAGES {
             let mut query = vec![
                 ("anchor", anchor.as_str()),
                 ("num_before", BATCH),
@@ -109,7 +96,7 @@ impl Client {
                 .get(format!("{}/api/v1/messages", self.base))
                 .query(&query);
             let page: Page = self
-                .send_ok(request)?
+                .send(request)?
                 .json()
                 .map_err(|_| t(msg::RESPONSE_UNREADABLE))?;
             let oldest = page.messages.iter().map(|m| m.id).min();
@@ -135,23 +122,34 @@ impl Client {
             .http
             .post(format!("{}/api/v1/messages/flags", self.base))
             .form(&form);
-        self.send_ok(request).map(|_| ())
+        self.send(request).map(drop)
     }
 }
 
-fn transport_error(e: reqwest::Error) -> String {
-    if e.is_timeout() {
-        t(msg::TIMED_OUT)
-    } else if e.is_connect() {
-        t(msg::CONNECT_FAILED)
-    } else {
-        t(msg::REQUEST_FAILED)
-    }
+fn transport_error(error: &reqwest::Error) -> String {
+    t(match Transport::of(error) {
+        Transport::TimedOut => msg::TIMED_OUT,
+        Transport::Connect => msg::CONNECT_FAILED,
+        Transport::Other => msg::REQUEST_FAILED,
+    })
 }
 
-fn status_error(status: StatusCode) -> String {
+fn status_error(status: u16) -> String {
+    let reason = match StatusReason::of(status) {
+        StatusReason::Redirected => msg::HTTP_REDIRECTED,
+        StatusReason::BadRequest => msg::HTTP_BAD_REQUEST,
+        StatusReason::Unauthorized => msg::HTTP_UNAUTHORIZED,
+        StatusReason::Forbidden => msg::HTTP_FORBIDDEN,
+        StatusReason::NotFound => msg::HTTP_NOT_FOUND,
+        StatusReason::RateLimited => msg::HTTP_RATE_LIMITED,
+        StatusReason::ServerError => msg::HTTP_SERVER_ERROR,
+        StatusReason::Unexpected => msg::HTTP_UNEXPECTED,
+    };
     t_args(
         msg::HTTP_STATUS,
-        &[("status", status.as_u16().to_string().as_str().into())],
+        &[
+            ("status", i64::from(status).into()),
+            ("reason", t(reason).as_str().into()),
+        ],
     )
 }

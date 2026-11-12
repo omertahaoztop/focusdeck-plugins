@@ -658,6 +658,12 @@ fn drop_moves_new_task_into_configured_bucket() {
     moved.assert();
 }
 
+fn dragged(c: &Ctx) -> Item {
+    let mut item = note("taşınan");
+    item.url = Some(format!("{}/tasks/77", c.server.url()));
+    item
+}
+
 fn vikunja_origin() -> Option<Source> {
     Some(Source {
         plugin: "vikunja".into(),
@@ -687,7 +693,7 @@ fn drop_from_same_project_moves_instead_of_creating() {
     let item = c
         .plugin
         .drop_item(DropParams {
-            item: note("taşınan"),
+            item: dragged(&c),
             from: vikunja_origin(),
         })
         .unwrap();
@@ -714,7 +720,7 @@ fn drop_from_same_project_without_bucket_uses_default_bucket() {
     .create();
     c.plugin
         .drop_item(DropParams {
-            item: note("taşınan"),
+            item: dragged(&c),
             from: vikunja_origin(),
         })
         .unwrap();
@@ -744,7 +750,7 @@ fn drop_from_other_project_sends_full_object_with_new_project() {
     let item = c
         .plugin
         .drop_item(DropParams {
-            item: note("taşınan"),
+            item: dragged(&c),
             from: vikunja_origin(),
         })
         .unwrap();
@@ -775,7 +781,7 @@ fn drop_from_other_project_moves_into_configured_bucket() {
     .create();
     c.plugin
         .drop_item(DropParams {
-            item: note("taşınan"),
+            item: dragged(&c),
             from: vikunja_origin(),
         })
         .unwrap();
@@ -913,4 +919,427 @@ fn list_pages_each_bucket_by_its_own_count() {
         ]),
     );
     assert_eq!(list(&mut c).len(), 206);
+}
+
+#[test]
+fn configure_refuses_plain_http_to_another_machine() {
+    let keyfile = keyfile_new();
+    let configure = |url: &str| {
+        Vikunja::default()
+            .configure(json!({
+                "url": url,
+                "token_file": keyfile.path().to_str().unwrap(),
+                "project": "Home",
+            }))
+            .unwrap_err()
+    };
+    assert_eq!(
+        configure("http://vikunja.example.com"),
+        "Vikunja: url must use https (plain http only works for localhost)"
+    );
+    assert_eq!(configure("vikunja.example.com"), "Vikunja: url is invalid");
+}
+
+#[test]
+fn redirect_is_reported_and_not_followed() {
+    let mut server = mockito::Server::new();
+    let elsewhere = server.mock("GET", "/elsewhere").expect(0).create();
+    let _m = server
+        .mock("GET", "/api/v1/projects?per_page=200&page=1")
+        .with_status(301)
+        .with_header("location", "/elsewhere")
+        .create();
+    let keyfile = keyfile_new();
+    let err = Vikunja::default()
+        .configure(config(&server, &keyfile, "Home", None))
+        .unwrap_err();
+    assert_eq!(err, "Vikunja 301: redirected, check the url");
+    elsewhere.assert();
+}
+
+#[test]
+fn configure_prefers_the_exact_title_over_a_case_variant() {
+    let mut server = mockito::Server::new();
+    let keyfile = keyfile_new();
+    let _projects = mock(&mut server, "GET", "/api/v1/projects?per_page=200&page=1")
+        .with_body(json!([{"id": 3, "title": "home"}, {"id": 9, "title": "Home"}]).to_string())
+        .create();
+    let _end = mock(&mut server, "GET", "/api/v1/projects?per_page=200&page=2")
+        .with_body("[]")
+        .create();
+    let views = mock(&mut server, "GET", "/api/v1/projects/9/views")
+        .with_body(kanban_views().to_string())
+        .expect(1)
+        .create();
+    let buckets = mock(&mut server, "GET", "/api/v1/projects/9/views/37/buckets")
+        .with_body(json!([{"id": 58, "title": "yeni"}, {"id": 59, "title": "Yeni"}]).to_string())
+        .create();
+    let mut plugin = Vikunja::default();
+    plugin
+        .configure(config(&server, &keyfile, "Home", Some("Yeni")))
+        .unwrap();
+    views.assert();
+    buckets.assert();
+    let listed = view_tasks(
+        &mut server,
+        json!([
+            {"id": 58, "title": "yeni", "tasks": [task(1, "a", 1.0)]},
+            {"id": 59, "title": "Yeni", "tasks": [task(2, "b", 2.0)]},
+        ]),
+    );
+    let items = plugin
+        .list(ListParams {
+            view: View::Summary,
+        })
+        .unwrap();
+    listed.assert();
+    assert_eq!(
+        items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
+        ["2"]
+    );
+}
+
+#[test]
+fn hostile_text_never_reaches_the_terminal() {
+    let mut c = ctx(None);
+    let mut t = task(1, "ko\u{1b}]0;x\u{7}nu\u{202e}", 1.0);
+    t["labels"] = json!([
+        {"id": 1, "title": "kimden:a\u{1b}[31mli"},
+        {"id": 2, "title": "ma\u{1b}[0mil\r"},
+    ]);
+    view_tasks(
+        &mut c.server,
+        json!([{"id": 59, "title": "Ye\u{1b}[2Jni", "tasks": [t]}]),
+    );
+    let items = list(&mut c);
+    assert_eq!(items[0].title, "ko]0;xnu");
+    assert_eq!(items[0].labels, ["ma[0mil"]);
+    assert_eq!(items[0].from.as_deref(), Some("a[31mli"));
+    assert_eq!(items[0].subtitle.as_deref(), Some("@a[31mli · Ye[2Jni"));
+}
+
+#[test]
+fn list_takes_the_last_source_marker() {
+    let mut c = ctx(None);
+    let mut t = task(1, "bağlı", 1.0);
+    t["description"] =
+        json!("<p>focusdeck-source: zulip:999</p><p>focusdeck-source: redmine:12345</p>");
+    let mut escaped = task(2, "kaçak", 2.0);
+    escaped["description"] = json!("<p>focusdeck-source: redmine:1\u{1b}[31m</p>");
+    view_tasks(
+        &mut c.server,
+        json!([{"id": 59, "title": "Yeni", "tasks": [t, escaped]}]),
+    );
+    let items = list(&mut c);
+    assert_eq!(
+        items[0].source,
+        Some(Source {
+            plugin: "redmine".into(),
+            id: "12345".into()
+        })
+    );
+    assert_eq!(items[1].source, None);
+}
+
+fn with_prefix(prefix: &str) -> Ctx {
+    let mut server = mockito::Server::new();
+    let base = base_mocks(&mut server, kanban_views());
+    let keyfile = keyfile_new();
+    let mut cfg = config(&server, &keyfile, "Home", None);
+    cfg["from_label_prefix"] = json!(prefix);
+    let mut plugin = Vikunja::default();
+    plugin.configure(cfg).unwrap();
+    Ctx {
+        server,
+        plugin,
+        _keyfile: keyfile,
+        _base: base,
+    }
+}
+
+#[test]
+fn from_label_prefix_is_configurable() {
+    let mut c = with_prefix("from:");
+    let mut t = task(7, "ara", 1.0);
+    t["labels"] = json!([{"id": 1, "title": "from:ali"}, {"id": 2, "title": "kimden:veli"}]);
+    view_tasks(
+        &mut c.server,
+        json!([{"id": 59, "title": "Yeni", "tasks": [t]}]),
+    );
+    let items = list(&mut c);
+    assert_eq!(items[0].from.as_deref(), Some("ali"));
+    assert_eq!(items[0].labels, ["kimden:veli"]);
+
+    label_search(
+        &mut c,
+        "from:ayşe",
+        json!([{"id": 8, "title": "from:ayşe"}]),
+    );
+    let _create = mock(&mut c.server, "PUT", "/api/v1/projects/9/tasks")
+        .with_body(created_task())
+        .create();
+    let bulk = mock(&mut c.server, "POST", "/api/v1/tasks/100/labels/bulk")
+        .match_body(Matcher::Json(json!({"labels": [{"id": 8}]})))
+        .with_body("{}")
+        .create();
+    let mut item = note("yeni");
+    item.from = Some("ayşe".into());
+    let created = c.plugin.drop_item(DropParams { item, from: None }).unwrap();
+    bulk.assert();
+    assert_eq!(created.from.as_deref(), Some("ayşe"));
+}
+
+#[test]
+fn empty_from_label_prefix_turns_the_sender_label_off() {
+    let mut c = with_prefix("");
+    let mut t = task(7, "ara", 1.0);
+    t["labels"] = json!([{"id": 1, "title": "kimden:ali"}]);
+    view_tasks(
+        &mut c.server,
+        json!([{"id": 59, "title": "Yeni", "tasks": [t]}]),
+    );
+    let items = list(&mut c);
+    assert_eq!(items[0].from, None);
+    assert_eq!(items[0].labels, ["kimden:ali"]);
+
+    let labels = mock(&mut c.server, "GET", "/api/v1/labels")
+        .match_query(Matcher::Any)
+        .expect(0)
+        .create();
+    let _create = mock(&mut c.server, "PUT", "/api/v1/projects/9/tasks")
+        .with_body(created_task())
+        .create();
+    let mut item = note("yeni");
+    item.from = Some("ali".into());
+    c.plugin.drop_item(DropParams { item, from: None }).unwrap();
+    labels.assert();
+}
+
+#[test]
+fn action_done_without_done_bucket_marks_the_task_done() {
+    let mut server = mockito::Server::new();
+    let _base = base_mocks(
+        &mut server,
+        json!([{"id": 37, "view_kind": "kanban", "default_bucket_id": 59}]),
+    );
+    let keyfile = keyfile_new();
+    let mut plugin = Vikunja::default();
+    plugin
+        .configure(config(&server, &keyfile, "Home", None))
+        .unwrap();
+    let mut original = task(5, "biten", 1.0);
+    original["priority"] = json!(3);
+    let mut expected = original.clone();
+    expected["done"] = json!(true);
+    let _get = mock(&mut server, "GET", "/api/v1/tasks/5")
+        .with_body(original.to_string())
+        .create();
+    let update = mock(&mut server, "POST", "/api/v1/tasks/5")
+        .match_body(Matcher::Json(expected.clone()))
+        .with_body(expected.to_string())
+        .create();
+    assert_eq!(
+        plugin.action(action("5", "done", Value::Null)).unwrap(),
+        None
+    );
+    update.assert();
+}
+
+#[test]
+fn drop_keeps_only_web_and_mail_links_clickable() {
+    let mut c = ctx(None);
+    let create = mock(&mut c.server, "PUT", "/api/v1/projects/9/tasks")
+        .match_body(Matcher::PartialJson(json!({
+            "description": "<p><a href=\"HTTPS://a.example.com/x\">web</a> <a href=\"mailto:ali@example.com\">posta</a> betik dosya</p>",
+        })))
+        .with_body(created_task())
+        .create();
+    let mut item = note("bağlar");
+    item.links = [
+        ("web", "HTTPS://a.example.com/x"),
+        ("posta", "mailto:ali@example.com"),
+        ("betik", " JavaScript:alert(1)"),
+        ("dosya", "file:///etc/passwd"),
+    ]
+    .map(|(label, url)| Link {
+        label: label.into(),
+        url: url.into(),
+    })
+    .to_vec();
+    c.plugin.drop_item(DropParams { item, from: None }).unwrap();
+    create.assert();
+}
+
+#[test]
+fn drop_removes_the_new_task_when_labelling_fails() {
+    let mut c = ctx(None);
+    label_search(&mut c, "mail", json!([{"id": 5, "title": "mail"}]));
+    let _create = mock(&mut c.server, "PUT", "/api/v1/projects/9/tasks")
+        .with_body(created_task())
+        .create();
+    let _bulk = mock(&mut c.server, "POST", "/api/v1/tasks/100/labels/bulk")
+        .with_status(500)
+        .create();
+    let removed = mock(&mut c.server, "DELETE", "/api/v1/tasks/100")
+        .with_body("{}")
+        .expect(1)
+        .create();
+    let mut item = note("yeni");
+    item.labels = vec!["mail".into()];
+    let err = c
+        .plugin
+        .drop_item(DropParams { item, from: None })
+        .unwrap_err();
+    assert_eq!(err, "Vikunja 500: server error");
+    removed.assert();
+}
+
+#[test]
+fn drop_removes_the_new_task_when_the_bucket_move_fails() {
+    let mut c = ctx(Some("Karşı tarafı bekliyorum"));
+    let _create = mock(&mut c.server, "PUT", "/api/v1/projects/9/tasks")
+        .with_body(created_task())
+        .create();
+    let _move = mock(
+        &mut c.server,
+        "POST",
+        "/api/v1/projects/9/views/37/buckets/62/tasks",
+    )
+    .with_status(403)
+    .create();
+    let removed = mock(&mut c.server, "DELETE", "/api/v1/tasks/100")
+        .with_body("{}")
+        .expect(1)
+        .create();
+    let err = c
+        .plugin
+        .drop_item(DropParams {
+            item: note("yeni"),
+            from: None,
+        })
+        .unwrap_err();
+    assert_eq!(err, "Vikunja 403: no permission");
+    removed.assert();
+}
+
+#[test]
+fn drop_names_the_task_it_could_not_remove() {
+    let mut c = ctx(None);
+    label_search(&mut c, "mail", json!([{"id": 5, "title": "mail"}]));
+    let _create = mock(&mut c.server, "PUT", "/api/v1/projects/9/tasks")
+        .with_body(created_task())
+        .create();
+    let _bulk = mock(&mut c.server, "POST", "/api/v1/tasks/100/labels/bulk")
+        .with_status(500)
+        .create();
+    let _remove = mock(&mut c.server, "DELETE", "/api/v1/tasks/100")
+        .with_status(429)
+        .create();
+    let mut item = note("yeni");
+    item.labels = vec!["mail".into()];
+    let err = c
+        .plugin
+        .drop_item(DropParams { item, from: None })
+        .unwrap_err();
+    assert_eq!(
+        err,
+        "Vikunja 500: server error. Task 100 could not be removed either, delete it before trying again"
+    );
+}
+
+fn stranger_is_left_alone(c: &mut Ctx, origin_id: &str, url: &str) {
+    let touched = c.server.mock("POST", Matcher::Any).expect(0).create();
+    let create = mock(&mut c.server, "PUT", "/api/v1/projects/9/tasks")
+        .match_body(Matcher::Json(json!({
+            "title": "taşınan",
+            "description": format!("<p>focusdeck-source: vikunja:{origin_id}</p>"),
+        })))
+        .with_body(created_task())
+        .expect(1)
+        .create();
+    let item = c
+        .plugin
+        .drop_item(DropParams {
+            item: Item {
+                url: Some(url.into()),
+                ..note("taşınan")
+            },
+            from: Some(Source {
+                plugin: "vikunja".into(),
+                id: origin_id.into(),
+            }),
+        })
+        .unwrap();
+    create.assert();
+    touched.assert();
+    assert_eq!(item.id, "100");
+}
+
+#[test]
+fn drop_from_another_vikunja_does_not_touch_a_task_that_shares_the_id_and_title() {
+    let mut c = ctx(None);
+    let _get = mock(&mut c.server, "GET", "/api/v1/tasks/77")
+        .with_body(task(77, "taşınan", 1.0).to_string())
+        .create();
+    stranger_is_left_alone(&mut c, "77", "https://other.example.com/tasks/77");
+}
+
+#[test]
+fn drop_from_another_vikunja_creates_when_the_id_is_unknown_here() {
+    for status in [403, 404] {
+        let mut c = ctx(None);
+        let _get = mock(&mut c.server, "GET", "/api/v1/tasks/77")
+            .with_status(status)
+            .create();
+        let here = format!("{}/tasks/77", c.server.url());
+        stranger_is_left_alone(&mut c, "77", &here);
+    }
+    let mut c = ctx(None);
+    let here = format!("{}/tasks/abc-77", c.server.url());
+    stranger_is_left_alone(&mut c, "abc-77", &here);
+}
+
+#[test]
+fn reminders_reuse_the_tasks_the_list_just_fetched() {
+    let mut c = ctx(None);
+    let mut reminded = task(1, "geç", 1.0);
+    reminded["reminders"] = json!([{"reminder": "2026-01-05T09:30:00Z"}]);
+    let fetched = mock(
+        &mut c.server,
+        "GET",
+        "/api/v1/projects/9/views/37/tasks?per_page=200&page=1",
+    )
+    .with_body(json!([{"id": 59, "title": "Yeni", "tasks": [reminded]}]).to_string())
+    .expect(1)
+    .create();
+    list(&mut c);
+    let since = chrono::DateTime::parse_from_rfc3339("2026-01-05T09:00:00Z").unwrap();
+    assert_eq!(
+        c.plugin.reminders(RemindersParams { since }).unwrap().len(),
+        1
+    );
+    fetched.assert();
+}
+
+#[test]
+fn reminders_refetch_after_a_change() {
+    let mut c = ctx(None);
+    let mut reminded = task(1, "geç", 1.0);
+    reminded["reminders"] = json!([{"reminder": "2026-01-05T09:30:00Z"}]);
+    let fetched = mock(
+        &mut c.server,
+        "GET",
+        "/api/v1/projects/9/views/37/tasks?per_page=200&page=1",
+    )
+    .with_body(json!([{"id": 59, "title": "Yeni", "tasks": [reminded]}]).to_string())
+    .expect(2)
+    .create();
+    list(&mut c);
+    let _delete = mock(&mut c.server, "DELETE", "/api/v1/tasks/1")
+        .with_body("{}")
+        .create();
+    c.plugin.action(action("1", "delete", Value::Null)).unwrap();
+    let since = chrono::DateTime::parse_from_rfc3339("2026-01-05T09:00:00Z").unwrap();
+    c.plugin.reminders(RemindersParams { since }).unwrap();
+    fetched.assert();
 }

@@ -28,6 +28,8 @@ config = { url = "https://redmine.example.com", key_file = "~/.config/focusdeck/
 
 The keys in the tables below go in this `config` table.
 
+Server addresses must use `https://`. Plain `http://` is accepted only for `localhost` and loopback addresses, and redirects are not followed, so a key or token never travels over an unencrypted connection or to another host.
+
 ## vikunja
 
 Lists the open tasks of a Vikunja project; marks them done, deletes them, moves them between buckets or reorders them, and creates tasks from dropped notes.
@@ -40,8 +42,15 @@ Profile settings:
 | `token_file` | File holding the API token, mode must be `0600` |
 | `project` | Project title |
 | `bucket` | Optional bucket title; if given, only that bucket is listed |
+| `from_label_prefix` | Optional prefix of the label that carries a note's sender; defaults to `kimden:`, an empty value turns the label off |
 
-In incoming notes, `from` becomes a `kimden:<name>` label, `labels` become labels and `links` become a links paragraph in the description. For an item coming from another box, its source is written to the description as a `focusdeck-source: <plugin>:<id>` line.
+Project and bucket titles are matched exactly first, then ignoring case.
+
+In incoming notes, `from` becomes a `<from_label_prefix><name>` label (`kimden:<name>` by default), `labels` become labels and `links` become a links paragraph in the description. Only `http`, `https` and `mailto` links are written as links; for any other only the label is kept, as plain text. For an item coming from another box, its source is written to the description as a `focusdeck-source: <plugin>:<id>` line. If labelling the new task or moving it to the bucket fails, the task is deleted again, so a retry leaves no duplicate. If the delete fails as well, the error names the task that was left behind.
+
+A note dropped from another vikunja box is moved instead of copied when its link points at this server and the task still exists there. Otherwise a new task is created.
+
+`done` moves the task to the view's done bucket. When the view has none, the task is marked done instead.
 
 ## redmine
 
@@ -56,7 +65,7 @@ Profile settings:
 
 ## zulip
 
-Lists starred messages; the `unstar` action removes the star.
+Lists starred messages; the `unstar` action removes the star. Reads at most the 100,000 newest starred messages.
 
 Profile settings:
 
@@ -68,13 +77,13 @@ Profile settings:
 
 ## gmail
 
-Lists starred Gmail messages with read-only access. No actions.
+Lists starred Gmail messages with read-only access. No actions. Reads at most 10,000 starred messages.
 
 Profile settings:
 
 | Key | Meaning |
 |---|---|
-| `client_file` | OAuth client JSON file downloaded from Google Cloud |
+| `client_file` | OAuth client JSON file downloaded from Google Cloud; `login` needs a client of type Desktop app |
 | `token_file` | File the refresh token is written to and read from, mode must be `0600` |
 | `api_url` | Optional, overrides the Gmail API address; defaults to Google's |
 
@@ -84,9 +93,9 @@ To create the token once:
 ~/.local/share/focusdeck/plugins/gmail login --client-file <path> --token-file <path> [--hint <email>]
 ```
 
-`focusdeck plugin install gmail` puts the binary at that path under the name `gmail`. If you built from source, the same command is `cargo run -p focusdeck-gmail -- login ...` or the built `focusdeck-gmail login ...`. If the session expires, the plugin's error says `focusdeck-gmail login`, which is the binary's name in the source tree; for the installed binary use the path above.
+`focusdeck plugin install gmail` puts the binary at that path under the name `gmail`. If you built from source, the same command is `cargo run -p focusdeck-gmail -- login ...` or the built `focusdeck-gmail login ...`. If the session expires, the plugin's error gives the `login` command with the full path of the binary that is running.
 
-The command prints an address to open in the browser and, after you approve, writes the token to the `--token-file` path with mode `0600`.
+The command prints an address to open in the browser and, after you approve, writes the token to the `--token-file` path with mode `0600`. It waits 5 minutes for the approval and only accepts the answer to the sign-in it started.
 
 ## Translating
 
@@ -100,8 +109,10 @@ Each plugin is released with its own tag. First bump the version in `plugins/<na
 git tag <name>-v<version> && git push origin <name>-v<version>
 ```
 
-The tag must look like `<name>-v<version>` and match the package version. The workflow builds binaries for two targets, opens a GitHub release and updates `index.toml`. Push at most three tags at once: when more than three tags arrive in one push, GitHub starts no workflow at all.
+The tag must look like `<name>-v<version>` and match the package version, which must be semver. The workflow builds binaries for two targets, opens a GitHub release and updates `index.toml`. The index tool refuses a version older than the one already in `index.toml`. The repository has immutable releases turned on and a tag ruleset on `*-v*`, so a published release cannot be changed and its tag cannot be moved or deleted. When the workflow runs again for the same tag, it keeps the published files and updates the index from them. A draft left behind by a failed run is filled again from the new build and then published. Each binary gets a build provenance attestation; check one with `gh attestation verify <file> --repo omertahaoztop/focusdeck-plugins`. Push at most three tags at once: when more than three tags arrive in one push, GitHub starts no workflow at all.
 
 ## Trying it locally
 
 `bash scripts/local-index.sh` builds the binaries and writes `dist/index.toml`. It prints the file's path; `dist/` is not tracked by git.
+
+CI runs `cargo fmt --all --check`, `cargo test --workspace --locked` and `cargo clippy --workspace --all-targets --locked -- -D warnings` with the toolchain pinned in `rust-toolchain.toml`.

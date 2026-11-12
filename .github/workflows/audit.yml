@@ -1,0 +1,22 @@
+name: audit
+
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  push:
+    paths: ['Cargo.lock', '.github/workflows/audit.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - run: cargo install cargo-audit --locked --version 0.23.0
+      - run: cargo audit
