@@ -534,7 +534,7 @@ fn drop_creates_task_with_labels_links_and_reminder() {
     let create = mock(&mut c.server, "PUT", "/api/v1/projects/9/tasks")
         .match_body(Matcher::Json(json!({
             "title": "Ali'yi ara",
-            "description": "<p>ayrıntı</p><p><a href=\"https://destek.mono.tr/issues/45539\">R45539</a></p>",
+            "description": "<p>ayrıntı</p><p><a href=\"https://redmine.example.com/issues/45539\">R45539</a></p>",
             "due_date": due,
             "reminders": [{"reminder": due}],
         })))
@@ -551,7 +551,7 @@ fn drop_creates_task_with_labels_links_and_reminder() {
     item.description = Some("ayrıntı".into());
     item.links = vec![Link {
         label: "R45539".into(),
-        url: "https://destek.mono.tr/issues/45539".into(),
+        url: "https://redmine.example.com/issues/45539".into(),
     }];
     let created = c.plugin.drop_item(DropParams { item, from: None }).unwrap();
     create_label.assert();

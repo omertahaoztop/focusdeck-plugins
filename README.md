@@ -4,6 +4,14 @@ focusdeck için plugin'ler. Her plugin ayrı bir süreçtir ve çekirdekle satı
 
 Plugin'ler kullanıcının yetkisiyle çalışır, kum havuzu yoktur. Yalnız güvendiğin dizinlerden kur.
 
+## Kurulum
+
+```
+focusdeck plugin install <ad>
+```
+
+Çekirdek `index.toml` dizininden makinenin hedefini seçer, ikiliyi indirir ve sha256'sını doğrular. Plugin adları: `vikunja`, `redmine`, `zulip`, `gmail`. Profil ayarları çekirdeğin `~/.config/focusdeck/config.toml` dosyasında durur. Adı `_file` ile biten ayarlar gizli bilginin durduğu dosyayı gösterir, izni `0600` olmalı.
+
 ## vikunja
 
 Vikunja projesindeki açık görevleri listeler, tamamlar, siler, sütun ya da sıra değiştirir, bırakılan notlardan görev açar.
@@ -18,6 +26,59 @@ Profil ayarları:
 | `bucket` | İsteğe bağlı sütun başlığı, verilirse yalnız o sütun listelenir |
 
 Gelen notlarda `from` `kimden:<ad>` etiketine, `labels` etiketlere, `links` açıklamadaki bağ paragrafına döner. Başka kutudan gelen öğenin kaynağı açıklamaya `focusdeck-source: <plugin>:<id>` satırı olarak yazılır.
+
+## redmine
+
+Bana atanmış açık Redmine işlerini listeler. Eylem yoktur.
+
+Profil ayarları:
+
+| Anahtar | Anlam |
+|---|---|
+| `url` | Redmine adresi, örneğin `https://redmine.example.com` |
+| `key_file` | API anahtarının durduğu dosya, izni `0600` olmalı |
+
+## zulip
+
+Yıldızlı mesajları listeler, `unstar` eylemiyle yıldızı kaldırır.
+
+Profil ayarları:
+
+| Anahtar | Anlam |
+|---|---|
+| `url` | Zulip adresi, örneğin `https://zulip.example.com` |
+| `email` | Bot ya da kullanıcının e-posta adresi |
+| `key_file` | API anahtarının durduğu dosya, izni `0600` olmalı |
+
+## gmail
+
+Yıldızlı Gmail maillerini listeler, salt okunur yetkiyle çalışır. Eylem yoktur.
+
+Profil ayarları:
+
+| Anahtar | Anlam |
+|---|---|
+| `client_file` | Google Cloud'dan indirilen OAuth istemci JSON dosyası |
+| `token_file` | Yenileme token'ının yazılacağı ve okunacağı dosya, izni `0600` olmalı |
+| `api_url` | İsteğe bağlı, Gmail API adresini değiştirir; varsayılan Google'ın adresidir |
+
+Token'ı bir kez üretmek için:
+
+```
+focusdeck-gmail login --client-file <yol> --token-file <yol> [--hint <e-posta>]
+```
+
+Komut tarayıcıda açman için bir adres basar, onaydan sonra token'ı `--token-file` yoluna `0600` izinle yazar.
+
+## Sürüm alma
+
+Her plugin kendi etiketiyle çıkar. Önce `plugins/<ad>/Cargo.toml` içindeki sürümü yükselt ve `main`'e gönder, sonra:
+
+```
+git tag <ad>-v<sürüm> && git push origin <ad>-v<sürüm>
+```
+
+Etiket `<ad>-v<sürüm>` biçiminde olmalı ve paket sürümüyle uyuşmalı. İş akışı iki hedef için ikili derler, GitHub sürümü açar ve `index.toml` dosyasını günceller.
 
 ## Yerel deneme
 

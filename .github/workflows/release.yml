@@ -1,0 +1,114 @@
+name: release
+
+on:
+  push:
+    tags: ['*-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            triple: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            triple: aarch64-unknown-linux-gnu
+    runs-on: ${{ matrix.runner }}
+    env:
+      TAG: ${{ github.ref_name }}
+      TRIPLE: ${{ matrix.triple }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Resolve plugin from tag
+        run: |
+          set -euo pipefail
+          name="${TAG%-v*}"
+          version="${TAG##*-v}"
+          [[ "$name" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || { echo "Etiketteki plugin adı geçersiz" >&2; exit 1; }
+          [[ "$version" =~ ^[0-9A-Za-z.+-]+$ ]] || { echo "Etiketteki sürüm geçersiz" >&2; exit 1; }
+          package=$(cargo metadata --format-version 1 --no-deps \
+            | jq -r --arg pkg "focusdeck-$name" '.packages[] | select(.name == $pkg) | .version')
+          [ -n "$package" ] || { echo "focusdeck-$name paketi yok" >&2; exit 1; }
+          cargo run --locked -p focusdeck-index -- check-tag \
+            --tag="$TAG" --name="$name" --version="$package"
+          echo "NAME=$name" >> "$GITHUB_ENV"
+      - name: Build
+        run: cargo build --release --locked -p "focusdeck-$NAME"
+      - name: Package
+        run: |
+          set -euo pipefail
+          mkdir dist
+          mv "target/release/focusdeck-$NAME" "dist/$NAME-$TRIPLE"
+          (cd dist && sha256sum "$NAME-$TRIPLE" > "$NAME-$TRIPLE.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-${{ matrix.triple }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: index
+      cancel-in-progress: false
+    env:
+      TAG: ${{ github.ref_name }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bin-*
+          merge-multiple: true
+          path: dist
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$TAG" dist/* --repo "$REPO" --title "$TAG" --notes ""
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+          persist-credentials: false
+      - name: Update index
+        run: |
+          set -euo pipefail
+          name="${TAG%-v*}"
+          version="${TAG##*-v}"
+          description=$(cargo metadata --format-version 1 --no-deps \
+            | jq -r --arg pkg "focusdeck-$name" '.packages[] | select(.name == $pkg) | .description')
+          [ -n "$description" ] || { echo "focusdeck-$name açıklaması yok" >&2; exit 1; }
+          args=()
+          for triple in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
+            sum=$(cut -d' ' -f1 "dist/$name-$triple.sha256")
+            url="https://github.com/$REPO/releases/download/$TAG/$name-$triple"
+            args+=(--target "$triple=$url,$sum")
+          done
+          cd main
+          cargo run --locked -p focusdeck-index -- set --index index.toml \
+            --name "$name" --description "$description" --version "$version" "${args[@]}"
+      - name: Push index
+        working-directory: main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.toml
+          git commit -m "Update index for $TAG"
+          git -c "http.extraheader=Authorization: basic $auth" pull --rebase origin main
+          git -c "http.extraheader=Authorization: basic $auth" push origin HEAD:main

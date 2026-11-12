@@ -1,0 +1,11 @@
+[package]
+name = "focusdeck-index"
+version = "0.1.0"
+description = "Plugin dizini index.toml dosyasını günceller"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+clap.workspace = true
+serde.workspace = true
+toml.workspace = true
