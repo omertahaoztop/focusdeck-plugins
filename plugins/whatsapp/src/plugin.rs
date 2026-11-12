@@ -125,8 +125,9 @@ impl Plugin for WhatsApp {
 
     fn list(&mut self, _p: ListParams) -> Result<Vec<Item>, String> {
         let target = self.target()?;
-        let mut hidden = load_hidden(&target.hidden_path)?;
         let mut messages = target.client.messages()?;
+        // loaded after the walk so a hide written meanwhile is not lost to a stale copy
+        let mut hidden = load_hidden(&target.hidden_path)?;
         let prune = target.client.since().is_none() && !messages.is_empty();
         if prune && hidden.retain(messages.iter().map(|m| m.id.as_str())) {
             save_hidden(&hidden, &target.hidden_path)?;
@@ -173,12 +174,16 @@ fn valid_jid(jid: &str) -> bool {
 }
 
 pub fn parse_since_in<Tz: TimeZone>(raw: &str, tz: &Tz) -> Result<DateTime<Utc>, String> {
-    NaiveDate::parse_from_str(raw.trim(), "%Y-%m-%d")
-        .ok()
-        .and_then(|day| day.and_hms_opt(0, 0, 0))
-        .and_then(|start| start.and_local_timezone(tz.clone()).earliest())
-        .map(|start| start.with_timezone(&Utc))
-        .ok_or_else(|| t(msg::SINCE_INVALID))
+    let day = NaiveDate::parse_from_str(raw.trim(), "%Y-%m-%d").ok();
+    // a zone that skips midnight on this date starts the day at its first existing hour
+    day.and_then(|day| {
+        (0..24).find_map(|hour| {
+            let start = day.and_hms_opt(hour, 0, 0)?;
+            start.and_local_timezone(tz.clone()).earliest()
+        })
+    })
+    .map(|start| start.with_timezone(&Utc))
+    .ok_or_else(|| t(msg::SINCE_INVALID))
 }
 
 fn load_hidden(path: &Path) -> Result<Hidden, String> {

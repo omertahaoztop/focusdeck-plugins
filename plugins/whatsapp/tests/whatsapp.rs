@@ -2,7 +2,9 @@ use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
-use chrono::{DateTime, FixedOffset, Local, NaiveDate, TimeZone, Utc};
+use chrono::{
+    DateTime, FixedOffset, Local, LocalResult, NaiveDate, NaiveDateTime, TimeDelta, TimeZone, Utc,
+};
 use focusdeck_protocol::{ActionParams, Item, ListParams, PROTOCOL_VERSION, Plugin, View};
 use focusdeck_whatsapp::client::Message;
 use focusdeck_whatsapp::hidden::Hidden;
@@ -684,6 +686,48 @@ fn since_is_resolved_in_the_given_zone() {
     let zone = FixedOffset::east_opt(3 * 3600).unwrap();
     let start = parse_since_in("2026-11-05", &zone).unwrap();
     assert_eq!(start.to_rfc3339(), "2026-11-04T21:00:00+00:00");
+}
+
+#[derive(Clone)]
+struct SkipsMidnight(NaiveDate);
+
+impl TimeZone for SkipsMidnight {
+    type Offset = FixedOffset;
+
+    fn from_offset(_: &FixedOffset) -> Self {
+        unreachable!()
+    }
+
+    fn offset_from_local_date(&self, _: &NaiveDate) -> LocalResult<FixedOffset> {
+        unreachable!()
+    }
+
+    fn offset_from_local_datetime(&self, local: &NaiveDateTime) -> LocalResult<FixedOffset> {
+        let gap = self.0.and_hms_opt(0, 0, 0).unwrap();
+        let east = |hours| FixedOffset::east_opt(hours * 3600).unwrap();
+        if *local < gap {
+            LocalResult::Single(east(2))
+        } else if *local < gap + TimeDelta::hours(1) {
+            LocalResult::None
+        } else {
+            LocalResult::Single(east(3))
+        }
+    }
+
+    fn offset_from_utc_date(&self, _: &NaiveDate) -> FixedOffset {
+        unreachable!()
+    }
+
+    fn offset_from_utc_datetime(&self, _: &NaiveDateTime) -> FixedOffset {
+        unreachable!()
+    }
+}
+
+#[test]
+fn since_on_a_day_without_midnight_starts_at_the_first_existing_hour() {
+    let day = NaiveDate::from_ymd_opt(2026, 4, 24).unwrap();
+    let start = parse_since_in("2026-04-24", &SkipsMidnight(day)).unwrap();
+    assert_eq!(start.to_rfc3339(), "2026-04-23T22:00:00+00:00");
 }
 
 #[test]
