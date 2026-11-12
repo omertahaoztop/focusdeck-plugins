@@ -416,7 +416,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "focusdeck-gmail"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -433,7 +433,8 @@ dependencies = [
 
 [[package]]
 name = "focusdeck-i18n"
-version = "0.1.0"
+version = "0.2.0"
+source = "git+https://github.com/omertahaoztop/focusdeck?tag=v0.2.0#a7ebf0aba35585c92f5550d33b7b47dfb2f52eaa"
 dependencies = [
  "fluent-bundle",
  "fluent-syntax",
@@ -451,8 +452,8 @@ dependencies = [
 
 [[package]]
 name = "focusdeck-protocol"
-version = "0.1.0"
-source = "git+https://github.com/omertahaoztop/focusdeck?tag=v0.1.0#db13bca0e1cf7e9d84bd5df02d2b7282a8e288d0"
+version = "0.2.0"
+source = "git+https://github.com/omertahaoztop/focusdeck?tag=v0.2.0#a7ebf0aba35585c92f5550d33b7b47dfb2f52eaa"
 dependencies = [
  "chrono",
  "serde",
@@ -461,7 +462,7 @@ dependencies = [
 
 [[package]]
 name = "focusdeck-redmine"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "focusdeck-i18n",
@@ -475,7 +476,7 @@ dependencies = [
 
 [[package]]
 name = "focusdeck-vikunja"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "focusdeck-i18n",
@@ -489,7 +490,7 @@ dependencies = [
 
 [[package]]
 name = "focusdeck-zulip"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "focusdeck-i18n",
  "focusdeck-protocol",
