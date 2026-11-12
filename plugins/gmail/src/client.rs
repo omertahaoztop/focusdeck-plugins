@@ -140,16 +140,17 @@ impl Client {
         }
     }
 
-    fn url(&self, segments: &[&str]) -> Url {
+    fn url(&self, segments: &[&str]) -> Result<Url, String> {
         let mut url = self.api.clone();
-        if let Ok(mut path) = url.path_segments_mut() {
-            path.pop_if_empty().extend(segments);
-        }
-        url
+        url.path_segments_mut()
+            .map_err(|()| url_error("api_url", UrlError::Invalid))?
+            .pop_if_empty()
+            .extend(segments);
+        Ok(url)
     }
 
     pub fn starred(&mut self) -> Result<Vec<&Message>, String> {
-        let list_url = self.url(&["messages"]);
+        let list_url = self.url(&["messages"])?;
         let mut ids = HashSet::new();
         let mut seen_tokens = HashSet::new();
         let mut page_token: Option<String> = None;
@@ -181,7 +182,7 @@ impl Client {
     }
 
     fn metadata(&mut self, id: &str) -> Result<Message, String> {
-        let url = self.url(&["messages", id]);
+        let url = self.url(&["messages", id])?;
         let query = [
             ("format", "metadata"),
             ("metadataHeaders", "From"),

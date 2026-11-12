@@ -103,6 +103,11 @@ jobs:
                 if [ -e "published/$name" ]; then
                   cp "published/$name" "$file"
                 else
+                  bin=${name%.sha256}
+                  if [ "$bin" != "$name" ] && [ -e "published/$bin" ]; then
+                    # the checksum has to describe the binary that is already out, not this rebuild
+                    (cd published && sha256sum "$bin") > "$file"
+                  fi
                   missing+=("$file")
                 fi
               done

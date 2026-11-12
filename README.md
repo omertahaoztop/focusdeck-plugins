@@ -65,7 +65,7 @@ Profile settings:
 
 ## zulip
 
-Lists starred messages; the `unstar` action removes the star.
+Lists starred messages; the `unstar` action removes the star. Reads at most the 100,000 newest starred messages.
 
 Profile settings:
 
@@ -77,7 +77,7 @@ Profile settings:
 
 ## gmail
 
-Lists starred Gmail messages with read-only access. No actions.
+Lists starred Gmail messages with read-only access. No actions. Reads at most 10,000 starred messages.
 
 Profile settings:
 

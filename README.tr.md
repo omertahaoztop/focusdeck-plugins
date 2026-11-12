@@ -65,7 +65,7 @@ Profil ayarları:
 
 ## zulip
 
-Yıldızlı mesajları listeler, `unstar` eylemiyle yıldızı kaldırır.
+Yıldızlı mesajları listeler, `unstar` eylemiyle yıldızı kaldırır. En yeni 100.000 yıldızlı mesajı okur.
 
 Profil ayarları:
 
@@ -77,7 +77,7 @@ Profil ayarları:
 
 ## gmail
 
-Yıldızlı Gmail maillerini listeler, salt okunur yetkiyle çalışır. Eylem yoktur.
+Yıldızlı Gmail maillerini listeler, salt okunur yetkiyle çalışır. Eylem yoktur. En çok 10.000 yıldızlı maili okur.
 
 Profil ayarları:
 
