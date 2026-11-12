@@ -8,6 +8,8 @@ use serde::{Deserialize, Deserializer};
 use serde_json::{Value, json};
 
 const KANBAN_KIND: u64 = 3;
+const PER_PAGE: usize = 200;
+const MAX_PAGES: usize = 1000;
 
 fn null_as_default<'de, D, T>(d: D) -> Result<T, D::Error>
 where
@@ -84,6 +86,8 @@ pub struct Bucket {
     pub title: String,
     #[serde(default, deserialize_with = "null_as_default")]
     pub tasks: Vec<Task>,
+    #[serde(default)]
+    pub count: u64,
 }
 
 pub struct Client {
@@ -132,6 +136,12 @@ impl Client {
         Self::typed(self.send(self.http.get(url).query(query))?)
     }
 
+    fn get_page<T: DeserializeOwned>(&self, path: &str, page: usize) -> Result<T, String> {
+        let page = page.to_string();
+        let per_page = PER_PAGE.to_string();
+        self.get(path, &[("per_page", &per_page), ("page", &page)])
+    }
+
     fn put<T: DeserializeOwned>(&self, path: &str, body: &Value) -> Result<T, String> {
         let url = format!("{}{path}", self.api);
         Self::typed(self.send(self.http.put(url).json(body))?)
@@ -142,8 +152,22 @@ impl Client {
         Self::typed(self.send(self.http.post(url).json(body))?)
     }
 
+    // the server may cap per_page below ours, so only an empty or repeated page ends the listing
     pub fn projects(&self) -> Result<Vec<Project>, String> {
-        self.get("/projects", &[("per_page", "200")])
+        let mut all: Vec<Project> = Vec::new();
+        for page in 1..=MAX_PAGES {
+            let batch: Vec<Project> = self.get_page("/projects", page)?;
+            let known = all.len();
+            for project in batch {
+                if all.iter().all(|p| p.id != project.id) {
+                    all.push(project);
+                }
+            }
+            if all.len() == known {
+                break;
+            }
+        }
+        Ok(all)
     }
 
     pub fn views(&self, project: u64) -> Result<Vec<ProjectView>, String> {
@@ -154,11 +178,48 @@ impl Client {
         self.get(&format!("/projects/{project}/views/{view}/buckets"), &[])
     }
 
+    /// Kanban pages are per bucket: later pages are merged into the buckets of the first one.
     pub fn view_tasks(&self, project: u64, view: u64) -> Result<Vec<Bucket>, String> {
-        self.get(
-            &format!("/projects/{project}/views/{view}/tasks"),
-            &[("per_page", "200")],
-        )
+        let path = format!("/projects/{project}/views/{view}/tasks");
+        let mut merged: Vec<Bucket> = Vec::new();
+        for page in 1..=MAX_PAGES {
+            let batch: Vec<Bucket> = self.get_page(&path, page)?;
+            let mut grew = false;
+            let mut more = false;
+            for bucket in batch {
+                let at = match merged.iter().position(|b| b.id == bucket.id) {
+                    Some(at) => at,
+                    None => {
+                        merged.push(Bucket {
+                            id: bucket.id,
+                            title: bucket.title.clone(),
+                            tasks: Vec::new(),
+                            count: bucket.count,
+                        });
+                        merged.len() - 1
+                    }
+                };
+                let have = &mut merged[at];
+                let returned = bucket.tasks.len();
+                let fresh: Vec<Task> = bucket
+                    .tasks
+                    .into_iter()
+                    .filter(|t| have.tasks.iter().all(|known| known.id != t.id))
+                    .collect();
+                grew |= !fresh.is_empty();
+                have.tasks.extend(fresh);
+                let total = usize::try_from(bucket.count).unwrap_or(usize::MAX);
+                more |= if total > 0 {
+                    total > have.tasks.len()
+                } else {
+                    returned >= PER_PAGE
+                };
+            }
+            if !(grew && more) {
+                break;
+            }
+        }
+        Ok(merged)
     }
 
     pub fn get_task_raw(&self, id: u64) -> Result<Value, String> {

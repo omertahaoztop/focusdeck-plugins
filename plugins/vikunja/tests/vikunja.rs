@@ -58,9 +58,12 @@ fn kanban_views() -> Value {
 
 fn base_mocks(server: &mut ServerGuard, views: Value) -> Vec<Mock> {
     vec![
-        mock(server, "GET", "/api/v1/projects?per_page=200")
+        mock(server, "GET", "/api/v1/projects?per_page=200&page=1")
             .match_header("user-agent", Matcher::Regex("^focusdeck-vikunja/".into()))
             .with_body(json!([{"id": 3, "title": "Başka"}, {"id": 9, "title": "Mono"}]).to_string())
+            .create(),
+        mock(server, "GET", "/api/v1/projects?per_page=200&page=2")
+            .with_body("[]")
             .create(),
         mock(server, "GET", "/api/v1/projects/9/views")
             .with_body(views.to_string())
@@ -106,7 +109,7 @@ fn view_tasks(server: &mut ServerGuard, columns: Value) -> Mock {
     mock(
         server,
         "GET",
-        "/api/v1/projects/9/views/37/tasks?per_page=200",
+        "/api/v1/projects/9/views/37/tasks?per_page=200&page=1",
     )
     .with_body(columns.to_string())
     .create()
@@ -242,7 +245,7 @@ fn configure_unknown_bucket() {
 fn configure_unauthorized_hides_token() {
     let mut server = mockito::Server::new();
     let _m = server
-        .mock("GET", "/api/v1/projects?per_page=200")
+        .mock("GET", "/api/v1/projects?per_page=200&page=1")
         .with_status(401)
         .with_body(json!({"message": format!("bad {TOKEN}")}).to_string())
         .create();
@@ -803,7 +806,7 @@ fn server_error_has_short_message_without_body() {
     mock(
         &mut c.server,
         "GET",
-        "/api/v1/projects/9/views/37/tasks?per_page=200",
+        "/api/v1/projects/9/views/37/tasks?per_page=200&page=1",
     )
     .with_status(500)
     .with_body(format!("stack trace {TOKEN}"))
@@ -815,4 +818,99 @@ fn server_error_has_short_message_without_body() {
         })
         .unwrap_err();
     assert_eq!(err, "Vikunja 500: sunucu hatası");
+}
+
+fn tasks_page(server: &mut ServerGuard, page: u32, columns: Value) -> Mock {
+    mock(
+        server,
+        "GET",
+        &format!("/api/v1/projects/9/views/37/tasks?per_page=200&page={page}"),
+    )
+    .with_body(columns.to_string())
+    .create()
+}
+
+fn numbered(range: std::ops::RangeInclusive<u64>) -> Vec<Value> {
+    range.map(|id| task(id, "t", id as f64)).collect()
+}
+
+#[test]
+fn configure_finds_project_on_later_page() {
+    let mut server = mockito::Server::new();
+    let keyfile = keyfile_new();
+    let mut page = |n: u32, body: Value| {
+        mock(
+            &mut server,
+            "GET",
+            &format!("/api/v1/projects?per_page=200&page={n}"),
+        )
+        .with_body(body.to_string())
+        .create()
+    };
+    let _p1 = page(1, json!([{"id": 3, "title": "Başka"}]));
+    let _p2 = page(2, json!([{"id": 9, "title": "Mono"}]));
+    let _p3 = page(3, json!([]));
+    let _views = mock(&mut server, "GET", "/api/v1/projects/9/views")
+        .with_body(kanban_views().to_string())
+        .create();
+    let mut plugin = Vikunja::default();
+    plugin
+        .configure(config(&server, &keyfile, "Mono", None))
+        .unwrap();
+}
+
+#[test]
+fn list_returns_tasks_beyond_the_first_page() {
+    let mut c = ctx(None);
+    tasks_page(
+        &mut c.server,
+        1,
+        json!([{"id": 59, "title": "Yeni", "count": 250, "tasks": numbered(1..=200)}]),
+    );
+    tasks_page(
+        &mut c.server,
+        2,
+        json!([{"id": 59, "title": "Yeni", "count": 250, "tasks": numbered(201..=250)}]),
+    );
+    let items = list(&mut c);
+    assert_eq!(items.len(), 250);
+    assert!(items.iter().any(|i| i.id == "250"));
+}
+
+#[test]
+fn list_pages_on_when_the_server_sends_no_count() {
+    let mut c = ctx(None);
+    tasks_page(
+        &mut c.server,
+        1,
+        json!([{"id": 59, "title": "Yeni", "tasks": numbered(1..=200)}]),
+    );
+    tasks_page(
+        &mut c.server,
+        2,
+        json!([{"id": 59, "title": "Yeni", "tasks": numbered(201..=230)}]),
+    );
+    assert_eq!(list(&mut c).len(), 230);
+}
+
+#[test]
+fn list_pages_each_bucket_by_its_own_count() {
+    let mut c = ctx(None);
+    tasks_page(
+        &mut c.server,
+        1,
+        json!([
+            {"id": 59, "title": "Yeni", "count": 205, "tasks": numbered(1..=200)},
+            {"id": 62, "title": "Karşı tarafı bekliyorum", "count": 1, "tasks": numbered(1000..=1000)},
+        ]),
+    );
+    tasks_page(
+        &mut c.server,
+        2,
+        json!([
+            {"id": 59, "title": "Yeni", "count": 205, "tasks": numbered(201..=205)},
+            {"id": 62, "title": "Karşı tarafı bekliyorum", "count": 1, "tasks": []},
+        ]),
+    );
+    assert_eq!(list(&mut c).len(), 206);
 }
