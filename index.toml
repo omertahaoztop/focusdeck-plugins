@@ -11,3 +11,17 @@ sha256 = "f13a4347f2eb6cfc0fc49e6f3ea0a8468827b9c5a8a701bb0ecbfd7384b8711c"
 [plugin.targets.x86_64-unknown-linux-gnu]
 url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/redmine-v0.1.0/redmine-x86_64-unknown-linux-gnu"
 sha256 = "47d90ab9c52b24654ecd37b25b31b4d2b076ab3319af2b047b0023eec98b965f"
+
+[[plugin]]
+name = "zulip"
+description = "Yıldızlı Zulip mesajları"
+version = "0.1.0"
+protocol = 1
+
+[plugin.targets.aarch64-unknown-linux-gnu]
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/zulip-v0.1.0/zulip-aarch64-unknown-linux-gnu"
+sha256 = "491316a0f3c6ad97dfe6065b420dfe6c1fe08035d2a55362bf2879c1b652ceea"
+
+[plugin.targets.x86_64-unknown-linux-gnu]
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/zulip-v0.1.0/zulip-x86_64-unknown-linux-gnu"
+sha256 = "604c7750e732821c83ac054a28d95adf3770f33f8ffdc587f8fa6ee8bf6e92d4"
