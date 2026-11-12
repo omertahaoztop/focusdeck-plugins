@@ -27,6 +27,20 @@ url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/redm
 sha256 = "47d90ab9c52b24654ecd37b25b31b4d2b076ab3319af2b047b0023eec98b965f"
 
 [[plugin]]
+name = "vikunja"
+description = "Vikunja projesindeki görevleri listeler, taşır ve not alır"
+version = "0.1.0"
+protocol = 1
+
+[plugin.targets.aarch64-unknown-linux-gnu]
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/vikunja-v0.1.0/vikunja-aarch64-unknown-linux-gnu"
+sha256 = "0084a2310da88caf9c97757d6bfaddf851f7c51e163fce1cacccb13bccac08e1"
+
+[plugin.targets.x86_64-unknown-linux-gnu]
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/vikunja-v0.1.0/vikunja-x86_64-unknown-linux-gnu"
+sha256 = "526b777d2ec483f6650fb3d2b71988fb8d7f4431770e8312debb2c9bd6c34122"
+
+[[plugin]]
 name = "zulip"
 description = "Yıldızlı Zulip mesajları"
 version = "0.1.0"
