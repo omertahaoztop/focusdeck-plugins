@@ -29,16 +29,16 @@ sha256 = "7f58fecfa7140d758b4bb52d11ce5ceedd5077482f521f43b0593c5f2fea6ba8"
 [[plugin]]
 name = "vikunja"
 description = "Open tasks of a Vikunja project"
-version = "0.1.0"
+version = "0.2.0"
 protocol = 1
 
 [plugin.targets.aarch64-unknown-linux-gnu]
-url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/vikunja-v0.1.0/vikunja-aarch64-unknown-linux-gnu"
-sha256 = "0084a2310da88caf9c97757d6bfaddf851f7c51e163fce1cacccb13bccac08e1"
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/vikunja-v0.2.0/vikunja-aarch64-unknown-linux-gnu"
+sha256 = "93cc393259b9d168e4373f1818b538f84c488fc836cbae5ccc72b250074303a1"
 
 [plugin.targets.x86_64-unknown-linux-gnu]
-url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/vikunja-v0.1.0/vikunja-x86_64-unknown-linux-gnu"
-sha256 = "526b777d2ec483f6650fb3d2b71988fb8d7f4431770e8312debb2c9bd6c34122"
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/vikunja-v0.2.0/vikunja-x86_64-unknown-linux-gnu"
+sha256 = "09ccb8c45ef89a8a48f57ad6935e5dad7a066b63c8b3181bba00c01d6c5d7d6a"
 
 [[plugin]]
 name = "zulip"
