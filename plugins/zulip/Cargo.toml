@@ -1,0 +1,16 @@
+[package]
+name = "focusdeck-zulip"
+version = "0.1.0"
+description = "Yıldızlı Zulip mesajları"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+focusdeck-protocol = { path = "../../../focusdeck/crates/focusdeck-protocol" }
+reqwest = { workspace = true, features = ["form"] }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+mockito.workspace = true
+tempfile.workspace = true
