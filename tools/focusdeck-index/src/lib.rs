@@ -216,7 +216,12 @@ mod tests {
 
     #[test]
     fn rejects_non_https_url() {
-        for bad in ["http://example.com/x", "file:///tmp/x", "example.com/x"] {
+        for bad in [
+            "http://example.com/x",
+            "file:///tmp/x",
+            "example.com/x",
+            "https://example.com/a b",
+        ] {
             let mut e = entry("redmine", "0.1.0");
             e.targets.get_mut(ARM).unwrap().url = bad.into();
             assert!(set_entry("", e).is_err(), "{bad}");
