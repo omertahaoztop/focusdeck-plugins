@@ -1,20 +1,16 @@
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
 
 use chrono::{
     DateTime, FixedOffset, Local, LocalResult, NaiveDate, NaiveDateTime, TimeDelta, TimeZone, Utc,
 };
 use focusdeck_protocol::{ActionParams, Item, ListParams, PROTOCOL_VERSION, Plugin, View};
 use focusdeck_whatsapp::client::Message;
-use focusdeck_whatsapp::hidden::Hidden;
 use focusdeck_whatsapp::i18n;
-use focusdeck_whatsapp::plugin::{
-    WhatsApp, hidden_path_in, parse_since_in, state_dir_from, to_item_in,
-};
+use focusdeck_whatsapp::plugin::{WhatsApp, parse_since_in, to_item_in};
 use mockito::{Matcher, Mock, ServerGuard};
 use serde_json::{Value, json};
-use tempfile::{NamedTempFile, TempDir};
+use tempfile::NamedTempFile;
 
 const KEY: &str = "s3cret-key";
 const USER: &str = "me";
@@ -41,25 +37,10 @@ fn config(server: &ServerGuard, keyfile: &NamedTempFile) -> Value {
 struct Fixture {
     server: ServerGuard,
     plugin: WhatsApp,
-    state: TempDir,
     _key: NamedTempFile,
 }
 
 impl Fixture {
-    fn hidden_path(&self) -> PathBuf {
-        self.state
-            .path()
-            .join(format!("whatsapp-hidden-{JID}.json"))
-    }
-
-    fn hidden_file(&self) -> String {
-        std::fs::read_to_string(self.hidden_path()).unwrap()
-    }
-
-    fn write_hidden(&self, content: &str) {
-        std::fs::write(self.hidden_path(), content).unwrap();
-    }
-
     fn list(&mut self) -> Result<Vec<Item>, String> {
         self.plugin.list(ListParams {
             view: View::Summary,
@@ -92,8 +73,7 @@ fn fixture_with(extra: Value) -> Fixture {
     let mut server = mockito::Server::new();
     probe(&mut server, 1);
     let key = keyfile(&format!("{KEY}\n"));
-    let state = TempDir::new().unwrap();
-    let mut plugin = WhatsApp::with_state_dir(state.path().to_path_buf());
+    let mut plugin = WhatsApp::default();
     let mut cfg = config(&server, &key);
     cfg.as_object_mut()
         .unwrap()
@@ -102,7 +82,6 @@ fn fixture_with(extra: Value) -> Fixture {
     Fixture {
         server,
         plugin,
-        state,
         _key: key,
     }
 }
@@ -165,7 +144,7 @@ fn now() -> DateTime<Utc> {
 }
 
 fn bare() -> WhatsApp {
-    WhatsApp::with_state_dir(std::env::temp_dir())
+    WhatsApp::default()
 }
 
 fn item_of(value: Value) -> Item {
@@ -176,7 +155,7 @@ fn item_of(value: Value) -> Item {
 fn describe_matches_contract() {
     let d = bare().describe();
     assert_eq!(d.name, "whatsapp");
-    assert_eq!(d.version, "0.1.0");
+    assert_eq!(d.version, "0.2.0");
     assert_eq!(d.protocol, PROTOCOL_VERSION);
     assert_eq!(d.actions, ["done"]);
     assert!(!d.accepts_drop && !d.reminders);
@@ -227,55 +206,65 @@ fn pages_until_total() {
 }
 
 #[test]
-fn incomplete_listing_is_an_error_and_keeps_hidden() {
+fn incomplete_listing_is_an_error() {
     let mut f = fixture();
-    let before = r#"{"version":1,"hidden":["gone"]}"#;
-    f.write_hidden(before);
-    let first: Vec<Value> = (0..100)
-        .map(|i| msg(&format!("m{i}"), "x", "2026-11-01T10:00:00Z"))
-        .collect();
-    listing(&mut f.server, 0, first, 150);
+    listing(&mut f.server, 0, full_page(0), 150);
     listing(&mut f.server, 100, vec![], 150);
     let err = f.list().unwrap_err();
     assert_eq!(err, "WhatsApp: listing came back incomplete (100/150)");
-    assert_eq!(f.hidden_file(), before);
 }
 
 #[test]
-fn done_hides_message_without_network() {
+fn done_deletes_the_message_from_the_chat() {
     let mut f = fixture();
-    let data = vec![
-        msg("a", "keep", "2026-11-01T10:00:00Z"),
-        msg("b", "hide", "2026-11-02T10:00:00Z"),
-    ];
-    let m = f
-        .server
-        .mock("GET", CHAT_PATH)
-        .match_query(Matcher::UrlEncoded("limit".into(), "100".into()))
-        .with_body(page(data, 2).to_string())
-        .expect(2)
+    let m = deletion(&mut f.server, "/message/b/delete");
+    assert_eq!(f.done("b").unwrap(), None);
+    m.assert();
+}
+
+fn deletion(server: &mut ServerGuard, path: &str) -> Mock {
+    server
+        .mock("POST", path)
+        .match_header("authorization", BASIC)
+        .match_body(Matcher::Json(json!({"phone": JID})))
+        .with_body(json!({"code": "SUCCESS", "message": "ok", "results": null}).to_string())
+        .expect(1)
+        .create()
+}
+
+#[test]
+fn failed_delete_is_an_error() {
+    let mut f = fixture();
+    f.server
+        .mock("POST", "/message/b/delete")
+        .with_status(500)
+        .with_body(format!("secret body {KEY}"))
         .create();
-    assert_eq!(titles(&f.list().unwrap()), ["hide", "keep"]);
-    let out = f.done("b").unwrap();
-    assert!(out.is_none());
-    assert_eq!(
-        f.hidden_file(),
-        r#"{"version":1,"hidden":["b"]}"#.to_string()
-    );
-    let mode = std::fs::metadata(f.hidden_path())
-        .unwrap()
-        .permissions()
-        .mode();
-    assert_eq!(mode & 0o777, 0o600);
-    // only the two list requests so far: `done` sent nothing
-    assert_eq!(titles(&f.list().unwrap()), ["keep"]);
+    assert_eq!(f.done("b").unwrap_err(), "WhatsApp 500: server error");
+}
+
+#[test]
+fn message_id_stays_one_path_segment() {
+    let mut f = fixture();
+    let m = deletion(&mut f.server, "/message/a%2F..%2Fb/delete");
+    f.done("a/../b").unwrap();
     m.assert();
 }
 
 #[test]
-fn only_reads_the_configured_chat() {
+fn id_that_cannot_be_a_path_segment_is_rejected_unsent() {
+    for id in ["", ".", ".."] {
+        let mut f = fixture();
+        let stray = f.server.mock("POST", Matcher::Any).expect(0).create();
+        assert_eq!(f.done(id).unwrap_err(), "WhatsApp: message id is invalid");
+        stray.assert();
+    }
+}
+
+#[test]
+fn only_reads_the_chat_and_deletes_the_done_message() {
     let mut server = mockito::Server::new();
-    let mut strays: Vec<Mock> = ["POST", "PUT", "PATCH", "DELETE"]
+    let mut strays: Vec<Mock> = ["PUT", "PATCH", "DELETE"]
         .iter()
         .map(|method| {
             server
@@ -287,6 +276,14 @@ fn only_reads_the_configured_chat() {
         .collect();
     strays.push(
         server
+            .mock("POST", Matcher::Any)
+            .match_request(|r| r.path() != "/message/a/delete")
+            .with_status(500)
+            .expect(0)
+            .create(),
+    );
+    strays.push(
+        server
             .mock("GET", Matcher::Any)
             .match_request(|r| !r.path().starts_with(CHAT_PATH))
             .with_status(500)
@@ -295,8 +292,7 @@ fn only_reads_the_configured_chat() {
     );
     let probe = probe(&mut server, 1);
     let key = keyfile(KEY);
-    let state = TempDir::new().unwrap();
-    let mut plugin = WhatsApp::with_state_dir(state.path().to_path_buf());
+    let mut plugin = WhatsApp::default();
     plugin.configure(config(&server, &key)).unwrap();
     let m = server
         .mock("GET", CHAT_PATH)
@@ -304,6 +300,7 @@ fn only_reads_the_configured_chat() {
         .with_body(page(vec![msg("a", "x", "2026-11-01T10:00:00Z")], 1).to_string())
         .expect(1)
         .create();
+    let d = deletion(&mut server, "/message/a/delete");
     plugin
         .list(ListParams {
             view: View::Summary,
@@ -318,57 +315,14 @@ fn only_reads_the_configured_chat() {
         .unwrap();
     probe.assert();
     m.assert();
+    d.assert();
     for stray in strays {
         stray.assert();
     }
 }
 
 #[test]
-fn corrupt_hidden_file_is_an_error() {
-    let mut f = fixture();
-    f.write_hidden("not json");
-    listing(
-        &mut f.server,
-        0,
-        vec![msg("a", "x", "2026-11-01T10:00:00Z")],
-        1,
-    );
-    let err = f.list().unwrap_err();
-    assert!(
-        err.starts_with("WhatsApp: hidden list is unreadable"),
-        "{err}"
-    );
-    assert_eq!(f.hidden_file(), "not json");
-    assert!(f.done("a").is_err());
-    assert_eq!(f.hidden_file(), "not json");
-}
-
-#[test]
-fn unknown_hidden_version_is_an_error() {
-    let mut f = fixture();
-    let before = r#"{"version":2,"hidden":[]}"#;
-    f.write_hidden(before);
-    listing(&mut f.server, 0, vec![], 0);
-    assert!(f.list().is_err());
-    assert_eq!(f.hidden_file(), before);
-}
-
-#[test]
-fn hidden_ids_gone_upstream_are_pruned() {
-    let mut f = fixture();
-    f.write_hidden(r#"{"version":1,"hidden":["a","b"]}"#);
-    listing(
-        &mut f.server,
-        0,
-        vec![msg("a", "x", "2026-11-01T10:00:00Z")],
-        1,
-    );
-    assert!(f.list().unwrap().is_empty());
-    assert_eq!(f.hidden_file(), r#"{"version":1,"hidden":["a"]}"#);
-}
-
-#[test]
-fn since_limits_and_skips_pruning() {
+fn since_is_sent_as_start_time() {
     let mut f = fixture_with(json!({"since": "2026-11-01"}));
     let start = NaiveDate::from_ymd_opt(2026, 11, 1)
         .unwrap()
@@ -379,8 +333,6 @@ fn since_limits_and_skips_pruning() {
         .unwrap()
         .with_timezone(&Utc)
         .to_rfc3339();
-    let before = r#"{"version":1,"hidden":["a","b"]}"#;
-    f.write_hidden(before);
     let m = f
         .server
         .mock("GET", CHAT_PATH)
@@ -391,9 +343,8 @@ fn since_limits_and_skips_pruning() {
         ]))
         .with_body(page(vec![msg("a", "x", "2026-11-02T10:00:00Z")], 1).to_string())
         .create();
-    assert!(f.list().unwrap().is_empty());
+    assert_eq!(titles(&f.list().unwrap()), ["x"]);
     m.assert();
-    assert_eq!(f.hidden_file(), before);
 }
 
 #[test]
@@ -636,26 +587,6 @@ fn unknown_action_is_error() {
     assert_eq!(err, "Unknown action: delete");
 }
 
-#[test]
-fn hidden_store_round_trips() {
-    let dir = TempDir::new().unwrap();
-    let path = dir.path().join("nested").join("whatsapp-hidden.json");
-    let mut hidden = Hidden::load(&path).unwrap();
-    assert!(!hidden.contains("a"));
-    hidden.insert("a");
-    hidden.insert("b");
-    hidden.save().unwrap();
-    let mut again = Hidden::load(&path).unwrap();
-    assert!(again.contains("a") && again.contains("b"));
-    assert!(again.retain(["a"]));
-    assert!(!again.retain(["a"]));
-    again.save().unwrap();
-    assert_eq!(
-        std::fs::read_to_string(&path).unwrap(),
-        r#"{"version":1,"hidden":["a"]}"#
-    );
-}
-
 fn full_page(from: usize) -> Vec<Value> {
     (from..from + 100)
         .map(|i| msg(&format!("m{i}"), "x", "2026-11-01T10:00:00Z"))
@@ -663,10 +594,8 @@ fn full_page(from: usize) -> Vec<Value> {
 }
 
 #[test]
-fn since_ignores_total_and_never_prunes() {
+fn since_ignores_total() {
     let mut f = fixture_with(json!({"since": "2026-11-05"}));
-    let before = r#"{"version":1,"hidden":["a","b"]}"#;
-    f.write_hidden(before);
     let m = f
         .server
         .mock("GET", CHAT_PATH)
@@ -678,7 +607,6 @@ fn since_ignores_total_and_never_prunes() {
         .create();
     assert_eq!(titles(&f.list().unwrap()), ["x"]);
     m.assert();
-    assert_eq!(f.hidden_file(), before);
 }
 
 #[test]
@@ -733,44 +661,26 @@ fn since_on_a_day_without_midnight_starts_at_the_first_existing_hour() {
 #[test]
 fn repeated_id_across_pages_is_an_error() {
     let mut f = fixture();
-    let before = r#"{"version":1,"hidden":["gone"]}"#;
-    f.write_hidden(before);
     let mut second = full_page(100);
     second[0] = msg("m0", "x", "2026-11-01T10:00:00Z");
     listing(&mut f.server, 0, full_page(0), 200);
     listing(&mut f.server, 100, second, 200);
     assert!(f.list().is_err());
-    assert_eq!(f.hidden_file(), before);
 }
 
 #[test]
 fn running_out_of_pages_is_an_error() {
     let mut f = fixture();
-    let before = r#"{"version":1,"hidden":["gone"]}"#;
-    f.write_hidden(before);
     for i in 0..20 {
         listing(&mut f.server, i * 100, full_page(i * 100), 2500);
     }
     listing(&mut f.server, 2000, full_page(2000), 2500);
     assert!(f.list().is_err());
-    assert_eq!(f.hidden_file(), before);
-}
-
-#[test]
-fn empty_listing_never_prunes() {
-    let mut f = fixture();
-    let before = r#"{"version":1,"hidden":["a"]}"#;
-    f.write_hidden(before);
-    listing(&mut f.server, 0, vec![], 0);
-    assert!(f.list().unwrap().is_empty());
-    assert_eq!(f.hidden_file(), before);
 }
 
 #[test]
 fn rows_with_zero_total_are_an_error() {
     let mut f = fixture();
-    let before = r#"{"version":1,"hidden":["a"]}"#;
-    f.write_hidden(before);
     listing(
         &mut f.server,
         0,
@@ -778,38 +688,6 @@ fn rows_with_zero_total_are_an_error() {
         0,
     );
     assert!(f.list().is_err());
-    assert_eq!(f.hidden_file(), before);
-}
-
-#[test]
-fn state_dir_resolution_order() {
-    let env = |pairs: &'static [(&'static str, &'static str)]| {
-        move |k: &str| {
-            pairs
-                .iter()
-                .find(|(n, _)| *n == k)
-                .map(|(_, v)| std::ffi::OsString::from(v))
-        }
-    };
-    let all = &[
-        ("FOCUSDECK_STATE_DIR", "/s"),
-        ("XDG_STATE_HOME", "/x"),
-        ("HOME", "/h"),
-    ];
-    assert_eq!(state_dir_from(env(all)), Some(PathBuf::from("/s")));
-    assert_eq!(
-        state_dir_from(env(&[("XDG_STATE_HOME", "/x"), ("HOME", "/h")])),
-        Some(PathBuf::from("/x/focusdeck"))
-    );
-    assert_eq!(
-        state_dir_from(env(&[("XDG_STATE_HOME", "rel"), ("HOME", "/h")])),
-        Some(PathBuf::from("/h/.local/state/focusdeck"))
-    );
-    assert_eq!(
-        state_dir_from(env(&[("FOCUSDECK_STATE_DIR", ""), ("HOME", "/h")])),
-        Some(PathBuf::from("/h/.local/state/focusdeck"))
-    );
-    assert_eq!(state_dir_from(env(&[])), None);
 }
 
 fn exactly_cap(f: &mut Fixture, total: usize) {
@@ -853,8 +731,6 @@ fn exactly_two_thousand_rows_is_complete_with_since() {
 #[test]
 fn row_past_the_cap_is_an_error_with_since() {
     let mut f = fixture_with(json!({"since": "2026-11-05"}));
-    let before = r#"{"version":1,"hidden":["gone"]}"#;
-    f.write_hidden(before);
     for i in 0..21 {
         f.server
             .mock("GET", CHAT_PATH)
@@ -866,60 +742,4 @@ fn row_past_the_cap_is_an_error_with_since() {
             .create();
     }
     assert!(f.list().is_err());
-    assert_eq!(f.hidden_file(), before);
-}
-
-#[test]
-fn hidden_file_is_named_after_the_jid() {
-    assert_eq!(
-        hidden_path_in(std::path::Path::new("/s"), JID),
-        PathBuf::from("/s/whatsapp-hidden-15550001111@s.whatsapp.net.json")
-    );
-}
-
-#[test]
-fn chats_keep_separate_hidden_files() {
-    let mut server = mockito::Server::new();
-    let other_path = "/chat/12345%40lid/messages";
-    let mut chat = |path: &str, ids: &[&str]| {
-        let rows = ids
-            .iter()
-            .map(|id| msg(id, "x", "2026-11-01T10:00:00Z"))
-            .collect();
-        server
-            .mock("GET", path)
-            .match_query(Matcher::Any)
-            .with_body(page(rows, ids.len()).to_string())
-            .create()
-    };
-    let _a = chat(CHAT_PATH, &["a"]);
-    let _b = chat(other_path, &["z"]);
-    let key = keyfile(KEY);
-    let state = TempDir::new().unwrap();
-    let configured = |jid: &str| {
-        let mut plugin = WhatsApp::with_state_dir(state.path().to_path_buf());
-        let mut cfg = config(&server, &key);
-        cfg["jid"] = json!(jid);
-        plugin.configure(cfg).unwrap();
-        plugin
-    };
-    let mut one = configured(JID);
-    let mut two = configured("12345@lid");
-    let ask = |p: &mut WhatsApp| {
-        p.list(ListParams {
-            view: View::Summary,
-        })
-        .unwrap()
-    };
-    one.action(ActionParams {
-        item: "a".into(),
-        action: "done".into(),
-        args: Value::Null,
-    })
-    .unwrap();
-    assert!(ask(&mut one).is_empty());
-    assert_eq!(ask(&mut two).len(), 1);
-    let file_a = std::fs::read_to_string(hidden_path_in(state.path(), JID)).unwrap();
-    assert_eq!(file_a, r#"{"version":1,"hidden":["a"]}"#);
-    assert!(!hidden_path_in(state.path(), "12345@lid").exists());
 }

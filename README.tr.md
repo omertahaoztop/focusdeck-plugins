@@ -77,7 +77,7 @@ Profil ayarları:
 
 ## whatsapp
 
-Tek bir WhatsApp sohbetinin mesajlarını bir [GOWA](https://github.com/aldinokemal/go-whatsapp-web-multidevice) REST sunucusundan listeler; "kendime yaz" sohbeti için düşünüldü. Salt okunur: plugin yalnız `GET /chat/<jid>/messages` isteği atar, WhatsApp'a hiçbir şey yazmaz. `done` eylemi mesajı kutudan gizler; gizlenen kimlikler focusdeck durum dizinindeki (`FOCUSDECK_STATE_DIR`, sonra mutlak bir `XDG_STATE_HOME`, sonra `~/.local/state`; son ikisinin sonuna `/focusdeck` eklenir) `whatsapp-hidden-<jid>.json` dosyasında durur, izni `0600`. Arama kayıtları listelenmez. Eksik gelen liste hatadır; artık dönmeyen kimlikler gizli dosyasından yalnız `since` yokken ve liste tam geldiğinde silinir. Aralıkta 2.000'den fazla mesaj olan sohbet hatadır; `since` aralığı daraltır. Sunucu bilinmeyen sohbeti bildirmez, bu yüzden yanlış yazılmış `jid` boş kutu verir.
+Tek bir WhatsApp sohbetinin mesajlarını bir [GOWA](https://github.com/aldinokemal/go-whatsapp-web-multidevice) REST sunucusundan listeler; "kendime yaz" sohbeti için düşünüldü. Plugin iki istek atar: listelemek için `GET /chat/<jid>/messages`, `done` eylemi için `POST /message/<id>/delete`. GOWA'nın önündeki proxy'nin yalnız bu ikisini geçirmesi yeter. `done` GOWA'dan mesajı senin için silmesini ister (WhatsApp'taki "benden sil"), GOWA mesajı kendi deposundan da çıkarır. Bu işlem geri alınamaz. Arama kayıtları listelenmez. Eksik gelen liste hatadır. Aralıkta 2.000'den fazla mesaj olan sohbet hatadır; `since` aralığı daraltır. Sunucu bilinmeyen sohbeti bildirmez, bu yüzden yanlış yazılmış `jid` boş kutu verir.
 
 Profil ayarları:
 
