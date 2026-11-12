@@ -43,16 +43,16 @@ sha256 = "09ccb8c45ef89a8a48f57ad6935e5dad7a066b63c8b3181bba00c01d6c5d7d6a"
 [[plugin]]
 name = "whatsapp"
 description = "Messages I sent to myself on WhatsApp"
-version = "0.1.0"
+version = "0.2.0"
 protocol = 1
 
 [plugin.targets.aarch64-unknown-linux-gnu]
-url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/whatsapp-v0.1.0/whatsapp-aarch64-unknown-linux-gnu"
-sha256 = "29afd87d6da9a584620d48dc8fbcbff631fa8f775de2e62381a822f9eb7938c4"
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/whatsapp-v0.2.0/whatsapp-aarch64-unknown-linux-gnu"
+sha256 = "e0576e965c9271ea9eb634e2fb96f63be683ec7fcbf53f8f16c0c71aa3d990db"
 
 [plugin.targets.x86_64-unknown-linux-gnu]
-url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/whatsapp-v0.1.0/whatsapp-x86_64-unknown-linux-gnu"
-sha256 = "7f54433170c56b32bff0721d76b9f381939270da5792243e871d7eb87fe7f519"
+url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/whatsapp-v0.2.0/whatsapp-x86_64-unknown-linux-gnu"
+sha256 = "92fc41a26fbf1d6922c6449031a649cf420e8f83ffd1d077660bc52683dd76b6"
 
 [[plugin]]
 name = "zulip"
