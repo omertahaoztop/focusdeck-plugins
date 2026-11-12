@@ -1,0 +1,17 @@
+[package]
+name = "focusdeck-vikunja"
+version = "0.1.0"
+description = "Vikunja projesindeki görevleri listeler, taşır ve not alır"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono.workspace = true
+focusdeck-protocol = { path = "../../../focusdeck/crates/focusdeck-protocol" }
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+mockito.workspace = true
+tempfile.workspace = true
