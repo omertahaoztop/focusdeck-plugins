@@ -5,25 +5,35 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use focusdeck_plugin_common::checked_url;
+use reqwest::Url;
 use reqwest::blocking::Client as Http;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
-use crate::client::{status_error, transport_error};
+use crate::client::{status_error, transport_error, url_error};
 use crate::i18n::{msg, t, t_args};
 
-#[derive(Deserialize)]
 pub struct ClientSecret {
     pub client_id: String,
     pub client_secret: String,
-    pub auth_uri: String,
-    pub token_uri: String,
+    pub auth_uri: Url,
+    pub token_uri: Url,
+    pub desktop: bool,
+}
+
+#[derive(Deserialize)]
+struct RawClient {
+    client_id: String,
+    client_secret: String,
+    auth_uri: String,
+    token_uri: String,
 }
 
 #[derive(Deserialize)]
 struct ClientFile {
-    installed: Option<ClientSecret>,
-    web: Option<ClientSecret>,
+    installed: Option<RawClient>,
+    web: Option<RawClient>,
 }
 
 #[derive(Deserialize)]
@@ -46,24 +56,22 @@ pub enum TokenError {
 }
 
 pub fn read_client_file(path: &Path) -> Result<ClientSecret, String> {
-    let shown = path.display();
-    let text = fs::read_to_string(path).map_err(|_| {
-        t_args(
-            msg::CLIENT_FILE_UNREADABLE,
-            &[("path", shown.to_string().as_str().into())],
-        )
-    })?;
-    let file: ClientFile = serde_json::from_str(&text).map_err(|_| {
-        t_args(
-            msg::CLIENT_FILE_INVALID,
-            &[("path", shown.to_string().as_str().into())],
-        )
-    })?;
-    file.installed.or(file.web).ok_or_else(|| {
-        t_args(
-            msg::CLIENT_FILE_INVALID,
-            &[("path", shown.to_string().as_str().into())],
-        )
+    let path_error = |id| t_args(id, &[("path", path.display().to_string().as_str().into())]);
+    let text = fs::read_to_string(path).map_err(|_| path_error(msg::CLIENT_FILE_UNREADABLE))?;
+    let file: ClientFile =
+        serde_json::from_str(&text).map_err(|_| path_error(msg::CLIENT_FILE_INVALID))?;
+    let (raw, desktop) = match (file.installed, file.web) {
+        (Some(raw), _) => (raw, true),
+        (None, Some(raw)) => (raw, false),
+        (None, None) => return Err(path_error(msg::CLIENT_FILE_INVALID)),
+    };
+    let uri = |field, raw: &str| checked_url(raw).map_err(|e| url_error(field, e));
+    Ok(ClientSecret {
+        auth_uri: uri("auth_uri", &raw.auth_uri)?,
+        token_uri: uri("token_uri", &raw.token_uri)?,
+        client_id: raw.client_id,
+        client_secret: raw.client_secret,
+        desktop,
     })
 }
 
@@ -110,10 +118,10 @@ pub fn request_token(
     form.push(("client_id", &secret.client_id));
     form.push(("client_secret", &secret.client_secret));
     let response = http
-        .post(&secret.token_uri)
+        .post(secret.token_uri.clone())
         .form(&form)
         .send()
-        .map_err(|e| TokenError::Other(transport_error(e)))?;
+        .map_err(|e| TokenError::Other(transport_error(&e)))?;
     let status = response.status();
     if !status.is_success() {
         return Err(TokenError::Status(status.as_u16()));
@@ -244,7 +252,8 @@ mod tests {
             std::fs::write(&path, body.to_string()).unwrap();
             let secret = read_client_file(&path).unwrap();
             assert_eq!(secret.client_id, "id");
-            assert_eq!(secret.token_uri, "https://a.example.com/token");
+            assert_eq!(secret.token_uri.as_str(), "https://a.example.com/token");
+            assert_eq!(secret.desktop, key == "installed");
         }
     }
 

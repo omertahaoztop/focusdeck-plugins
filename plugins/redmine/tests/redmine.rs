@@ -147,17 +147,71 @@ fn duplicate_across_pages_counts_once() {
 }
 
 #[test]
-fn http_error_names_only_the_status() {
+fn http_error_names_the_status_and_reason_only() {
+    let cases = [
+        (400, "Redmine 400: invalid request"),
+        (403, "Redmine 403: no permission"),
+        (404, "Redmine 404: not found"),
+        (429, "Redmine 429: too many requests"),
+        (500, "Redmine 500: server error"),
+        (418, "Redmine 418: unexpected response"),
+    ];
+    for (status, expected) in cases {
+        let mut server = mockito::Server::new();
+        let (mut plugin, _file, _user) = configured(&mut server);
+        server
+            .mock("GET", "/issues.json")
+            .match_query(Matcher::Any)
+            .with_status(status)
+            .with_body(format!("secret body {KEY}"))
+            .create();
+        assert_eq!(list(&mut plugin).unwrap_err(), expected);
+    }
+}
+
+#[test]
+fn redirect_is_reported_and_the_key_does_not_follow_it() {
     let mut server = mockito::Server::new();
     let (mut plugin, _file, _user) = configured(&mut server);
+    let elsewhere = server.mock("GET", "/elsewhere").expect(0).create();
     server
         .mock("GET", "/issues.json")
         .match_query(Matcher::Any)
-        .with_status(500)
-        .with_body(format!("secret body {KEY}"))
+        .with_status(302)
+        .with_header("location", "/elsewhere")
         .create();
-    let err = list(&mut plugin).unwrap_err();
-    assert_eq!(err, "Redmine: HTTP 500");
+    assert_eq!(
+        list(&mut plugin).unwrap_err(),
+        "Redmine 302: redirected, check the url"
+    );
+    elsewhere.assert();
+}
+
+#[test]
+fn plain_http_to_another_machine_is_refused_before_any_request() {
+    let file = keyfile(KEY);
+    let configure = |url: &str| {
+        Redmine::default()
+            .configure(json!({"url": url, "key_file": file.path().to_str().unwrap()}))
+            .unwrap_err()
+    };
+    assert_eq!(
+        configure("http://redmine.example.com"),
+        "Redmine: url must use https (plain http only works for localhost)"
+    );
+    assert_eq!(configure("redmine.example.com"), "Redmine: url is invalid");
+}
+
+#[test]
+fn hostile_characters_are_stripped_from_shown_text() {
+    let hostile: Issue = serde_json::from_value(json!({
+        "id": 1, "subject": "\u{1b}[2Jfatura\u{202e}fdp",
+        "priority": {"id": 6, "name": "Ö1\u{7} - Acil"},
+    }))
+    .unwrap();
+    let item = to_item(&hostile, "https://redmine.example.com", day(2026, 11, 12));
+    assert_eq!(item.title, "[2Jfaturafdp");
+    assert_eq!(item.subtitle.as_deref(), Some("Ö1"));
 }
 
 #[test]
@@ -217,7 +271,7 @@ fn rejected_key_fails_configure() {
     let err = Redmine::default()
         .configure(config(&server, &file))
         .unwrap_err();
-    assert_eq!(err, "Redmine: key rejected");
+    assert_eq!(err, "Redmine 401: key rejected");
     assert!(!err.contains(KEY));
 }
 

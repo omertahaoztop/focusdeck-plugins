@@ -16,7 +16,11 @@ use tempfile::{NamedTempFile, TempDir};
 const REFRESH: &str = "refresh-secret-1";
 const CLIENT_SECRET: &str = "client-secret-1";
 const API: &str = "/gmail/v1/users/me";
-const REVOKED: &str = "Gmail session expired: focusdeck-gmail login";
+
+fn revoked() -> String {
+    let bin = std::env::current_exe().unwrap();
+    format!("Gmail session expired, run: {} login", bin.display())
+}
 
 struct Files {
     client: NamedTempFile,
@@ -45,7 +49,7 @@ fn config(server: &ServerGuard, files: &Files) -> Value {
     json!({
         "client_file": files.client.path().to_str().unwrap(),
         "token_file": files.token.path().to_str().unwrap(),
-        "api_url": format!("{}{API}/", server.url()),
+        "api_url": format!("{}{API}//", server.url()),
     })
 }
 
@@ -348,7 +352,7 @@ fn revoked_refresh_token_tells_to_login() {
         let err = Gmail::default()
             .configure(config(&server, &files))
             .unwrap_err();
-        assert_eq!(err, REVOKED);
+        assert_eq!(err, revoked());
         assert!(!err.contains(REFRESH) && !err.contains(CLIENT_SECRET));
     }
 }
@@ -365,7 +369,7 @@ fn token_endpoint_failure_names_only_the_status() {
     let err = Gmail::default()
         .configure(config(&server, &files))
         .unwrap_err();
-    assert_eq!(err, "Gmail: HTTP 503");
+    assert_eq!(err, "Gmail 503: server error");
 }
 
 #[test]
@@ -402,16 +406,213 @@ fn valid_access_token_is_reused() {
 }
 
 #[test]
-fn http_error_names_only_the_status() {
+fn http_error_names_the_status_and_reason_only() {
+    let cases = [
+        (400, "Gmail 400: invalid request"),
+        (403, "Gmail 403: no permission"),
+        (404, "Gmail 404: not found"),
+        (429, "Gmail 429: too many requests"),
+        (500, "Gmail 500: server error"),
+        (418, "Gmail 418: unexpected response"),
+    ];
+    for (status, expected) in cases {
+        let mut server = mockito::Server::new();
+        let (mut plugin, _files, _token) = configured(&mut server);
+        server
+            .mock("GET", format!("{API}/messages").as_str())
+            .match_query(Matcher::Any)
+            .with_status(status)
+            .with_body(format!("secret body {REFRESH}"))
+            .create();
+        assert_eq!(list(&mut plugin).unwrap_err(), expected);
+    }
+}
+
+#[test]
+fn api_redirect_is_reported_and_not_followed() {
     let mut server = mockito::Server::new();
     let (mut plugin, _files, _token) = configured(&mut server);
+    let elsewhere = server.mock("GET", "/elsewhere").expect(0).create();
     server
         .mock("GET", format!("{API}/messages").as_str())
         .match_query(Matcher::Any)
-        .with_status(500)
-        .with_body(format!("secret body {REFRESH}"))
+        .with_status(302)
+        .with_header("location", "/elsewhere")
         .create();
-    assert_eq!(list(&mut plugin).unwrap_err(), "Gmail: HTTP 500");
+    assert_eq!(list(&mut plugin).unwrap_err(), "Gmail 302: redirected");
+    elsewhere.assert();
+}
+
+#[test]
+fn token_endpoint_redirect_does_not_resend_the_secrets() {
+    let mut server = mockito::Server::new();
+    let elsewhere = server.mock("POST", "/elsewhere").expect(0).create();
+    server
+        .mock("POST", "/token")
+        .with_status(307)
+        .with_header("location", "/elsewhere")
+        .create();
+    let files = files(&server, "installed");
+    let err = Gmail::default()
+        .configure(config(&server, &files))
+        .unwrap_err();
+    assert_eq!(err, "Gmail 307: redirected");
+    elsewhere.assert();
+}
+
+fn client_file(auth_uri: &str, token_uri: &str) -> NamedTempFile {
+    let mut file = NamedTempFile::new().unwrap();
+    write!(
+        file,
+        "{}",
+        json!({"installed": {
+            "client_id": "cid.example.com",
+            "client_secret": CLIENT_SECRET,
+            "auth_uri": auth_uri,
+            "token_uri": token_uri,
+        }})
+    )
+    .unwrap();
+    file
+}
+
+#[test]
+fn plain_http_to_another_machine_is_refused_before_any_request() {
+    let server = mockito::Server::new();
+    let good = files(&server, "installed");
+    let configure = |client: &std::path::Path, api_url: &str| {
+        Gmail::default()
+            .configure(json!({
+                "client_file": client.to_str().unwrap(),
+                "token_file": good.token.path().to_str().unwrap(),
+                "api_url": api_url,
+            }))
+            .unwrap_err()
+    };
+    let api = "https://gmail.googleapis.com/gmail/v1/users/me";
+    assert_eq!(
+        configure(good.client.path(), "http://gmail.example.com/v1"),
+        "Gmail: api_url must use https (plain http only works for localhost)"
+    );
+    assert_eq!(
+        configure(good.client.path(), "gmail.example.com"),
+        "Gmail: api_url is invalid"
+    );
+    let token_uri = client_file("https://a.example.com/auth", "http://a.example.com/token");
+    assert_eq!(
+        configure(token_uri.path(), api),
+        "Gmail: token_uri must use https (plain http only works for localhost)"
+    );
+    let auth_uri = client_file("http://a.example.com/auth", "https://a.example.com/token");
+    assert_eq!(
+        configure(auth_uri.path(), api),
+        "Gmail: auth_uri must use https (plain http only works for localhost)"
+    );
+}
+
+fn starred_ids(server: &mut ServerGuard, access: &str, ids: &[&str]) -> Mock {
+    let messages: Vec<Value> = ids.iter().map(|id| json!({"id": id})).collect();
+    server
+        .mock("GET", format!("{API}/messages").as_str())
+        .match_header("authorization", format!("Bearer {access}").as_str())
+        .match_query(Matcher::Any)
+        .with_body(json!({"messages": messages}).to_string())
+        .create()
+}
+
+#[test]
+fn rejected_access_token_is_renewed_and_the_request_repeated() {
+    let mut server = mockito::Server::new();
+    let (mut plugin, _files, first) = configured(&mut server);
+    first.remove();
+    let renewed = token_mock(&mut server, "tok-2", 3600).expect(1);
+    let stale = server
+        .mock("GET", format!("{API}/messages").as_str())
+        .match_header("authorization", "Bearer tok-1")
+        .match_query(Matcher::Any)
+        .with_status(401)
+        .expect(1)
+        .create();
+    let fresh = starred_ids(&mut server, "tok-2", &[]).expect(1);
+    assert!(list(&mut plugin).unwrap().is_empty());
+    for m in [renewed, stale, fresh] {
+        m.assert();
+    }
+}
+
+#[test]
+fn access_token_rejected_twice_is_an_error_not_a_loop() {
+    let mut server = mockito::Server::new();
+    let (mut plugin, _files, first) = configured(&mut server);
+    first.remove();
+    let renewed = token_mock(&mut server, "tok-2", 3600).expect(1);
+    let rejected = server
+        .mock("GET", format!("{API}/messages").as_str())
+        .match_query(Matcher::Any)
+        .with_status(401)
+        .expect(2)
+        .create();
+    assert_eq!(
+        list(&mut plugin).unwrap_err(),
+        "Gmail 401: sign-in rejected"
+    );
+    renewed.assert();
+    rejected.assert();
+}
+
+#[test]
+fn absurd_token_lifetime_does_not_crash() {
+    let mut server = mockito::Server::new();
+    let _token = token_mock(&mut server, "tok-1", u64::MAX);
+    let files = files(&server, "installed");
+    let mut plugin = Gmail::default();
+    plugin.configure(config(&server, &files)).unwrap();
+    starred_ids(&mut server, "tok-1", &[]);
+    assert!(list(&mut plugin).unwrap().is_empty());
+}
+
+#[test]
+fn metadata_is_fetched_once_per_starred_message() {
+    let mut server = mockito::Server::new();
+    let (mut plugin, _files, _token) = configured(&mut server);
+    let now = Local::now().timestamp_millis();
+    let both = starred_ids(&mut server, "tok-1", &["m1", "m2"]);
+    let m1 = metadata_mock(&mut server, "m1", "t1", now - 2_000, headers("A", "bir")).expect(1);
+    let m2 = metadata_mock(&mut server, "m2", "t2", now - 1_000, headers("B", "iki")).expect(1);
+    let titles = |plugin: &mut Gmail| -> Vec<String> {
+        list(plugin).unwrap().into_iter().map(|i| i.title).collect()
+    };
+    assert_eq!(titles(&mut plugin), ["bir", "iki"]);
+    assert_eq!(titles(&mut plugin), ["bir", "iki"]);
+    m1.assert();
+    m2.assert();
+
+    both.remove();
+    starred_ids(&mut server, "tok-1", &["m2", "m3"]);
+    let m3 = metadata_mock(&mut server, "m3", "t3", now, headers("C", "üç")).expect(1);
+    assert_eq!(titles(&mut plugin), ["iki", "üç"]);
+    m2.assert();
+    m3.assert();
+}
+
+#[test]
+fn endless_page_tokens_are_cut_off() {
+    let mut server = mockito::Server::new();
+    let (mut plugin, _files, _token) = configured(&mut server);
+    let counter = std::sync::atomic::AtomicUsize::new(0);
+    let endless = server
+        .mock("GET", format!("{API}/messages").as_str())
+        .match_query(Matcher::Any)
+        .with_body_from_request(move |_| {
+            let next = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            json!({"messages": [], "nextPageToken": format!("p{next}")})
+                .to_string()
+                .into_bytes()
+        })
+        .expect(100)
+        .create();
+    assert!(list(&mut plugin).unwrap().is_empty());
+    endless.assert();
 }
 
 #[test]
@@ -570,26 +771,62 @@ fn login_without_refresh_token_fails() {
 }
 
 #[test]
-fn login_rejects_wrong_state_without_contacting_the_token_endpoint() {
+fn login_ignores_a_forged_callback_and_finishes_with_the_real_one() {
     let mut server = mockito::Server::new();
     let files = files(&server, "installed");
     let dir = TempDir::new().unwrap();
-    let exchange = server.mock("POST", "/token").expect(0).create();
+    let token_path = dir.path().join("token.json");
+    let exchange = server
+        .mock("POST", "/token")
+        .match_body(Matcher::UrlEncoded("code".into(), "real".into()))
+        .with_body(
+            json!({"access_token": "a", "expires_in": 3600, "refresh_token": "new-refresh"})
+                .to_string(),
+        )
+        .expect(1)
+        .create();
     let args = LoginArgs {
         client_file: files.client.path().to_path_buf(),
-        token_file: dir.path().join("token.json"),
+        token_file: token_path.clone(),
         hint: None,
     };
-    let err = login::run_with(args, |url| {
+    let (tx, rx) = std::sync::mpsc::channel();
+    login::run_with(args, move |url| {
         let url = reqwest::Url::parse(url).unwrap();
         let q: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
         let port = reqwest::Url::parse(&q["redirect_uri"])
             .unwrap()
             .port()
             .unwrap();
-        std::thread::spawn(move || get(port, "/?code=c&state=forged"));
+        let state = q["state"].clone();
+        std::thread::spawn(move || {
+            tx.send(get(port, "/?code=forged&state=forged")).unwrap();
+            tx.send(get(port, "/?error=access_denied")).unwrap();
+            get(port, &format!("/?code=real&state={state}"));
+        });
     })
-    .unwrap_err();
-    assert_eq!(err, "authorization denied");
+    .unwrap();
     exchange.assert();
+    for _ in 0..2 {
+        let page = rx.recv().unwrap();
+        assert!(page.starts_with("HTTP/1.1 400"), "{page}");
+    }
+    assert!(token_path.exists());
+}
+
+#[test]
+fn login_refuses_a_web_client_before_opening_the_browser() {
+    let server = mockito::Server::new();
+    let files = files(&server, "web");
+    let dir = TempDir::new().unwrap();
+    let args = LoginArgs {
+        client_file: files.client.path().to_path_buf(),
+        token_file: dir.path().join("token.json"),
+        hint: None,
+    };
+    let err = login::run_with(args, |_| panic!("the browser must not be opened")).unwrap_err();
+    assert_eq!(
+        err,
+        "Login needs a Desktop app OAuth client; this client file is for a web application"
+    );
 }

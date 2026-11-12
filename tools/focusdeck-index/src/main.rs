@@ -93,3 +93,44 @@ fn main() -> ExitCode {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn target_specs_split_at_the_first_equals_and_the_last_comma() {
+        let cases = [
+            (
+                "x86_64-unknown-linux-gnu=https://example.com/a,abc",
+                ("x86_64-unknown-linux-gnu", "https://example.com/a", "abc"),
+            ),
+            (
+                "arm=https://example.com/a,b?x=1,abc",
+                ("arm", "https://example.com/a,b?x=1", "abc"),
+            ),
+            ("arm=,", ("arm", "", "")),
+        ];
+        for (spec, (triple, url, sha256)) in cases {
+            let (name, target) = parse_target(spec).unwrap();
+            assert_eq!(name, triple, "{spec}");
+            assert_eq!(target.url, url, "{spec}");
+            assert_eq!(target.sha256, sha256, "{spec}");
+        }
+    }
+
+    #[test]
+    fn target_specs_without_both_separators_are_refused() {
+        for spec in [
+            "",
+            "arm",
+            "arm=https://example.com/a",
+            "https://example.com/a,abc",
+        ] {
+            assert_eq!(
+                parse_target(spec).unwrap_err(),
+                format!("Target must look like <triple>=<url>,<sha256>: {spec}"),
+            );
+        }
+    }
+}

@@ -1,0 +1,16 @@
+[package]
+name = "focusdeck-plugin-common"
+version = "0.1.0"
+description = "Transport and text rules shared by the focusdeck plugins"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+reqwest.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+mockito.workspace = true
+proptest.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true

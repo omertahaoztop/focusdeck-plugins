@@ -1,5 +1,6 @@
 use chrono::{Local, NaiveDate};
 use focusdeck_i18n::Localizer;
+use focusdeck_plugin_common::{SecretError, UrlError, checked_base, printable, read_secret};
 use focusdeck_protocol::{ActionParams, Describe, Item, ListParams, PROTOCOL_VERSION, Plugin};
 use serde::Deserialize;
 use serde_json::Value;
@@ -44,25 +45,22 @@ impl Plugin for Redmine {
                 &[("error", e.to_string().as_str().into())],
             )
         })?;
-        let key = std::fs::read_to_string(&cfg.key_file).map_err(|_| {
-            t_args(
-                msg::KEY_FILE_UNREADABLE,
-                &[("path", cfg.key_file.as_str().into())],
-            )
+        let base = checked_base(&cfg.url).map_err(|e| {
+            t(match e {
+                UrlError::Invalid => msg::URL_INVALID,
+                UrlError::Insecure => msg::URL_INSECURE,
+            })
         })?;
-        let key = key.trim();
-        if key.is_empty() {
-            return Err(t_args(
-                msg::KEY_FILE_EMPTY,
-                &[("path", cfg.key_file.as_str().into())],
-            ));
-        }
-        let client = Client::new(&cfg.url, key)?;
+        let key = read_secret(&cfg.key_file).map_err(|e| {
+            let id = match e {
+                SecretError::Unreadable => msg::KEY_FILE_UNREADABLE,
+                SecretError::Empty => msg::KEY_FILE_EMPTY,
+            };
+            t_args(id, &[("path", cfg.key_file.as_str().into())])
+        })?;
+        let client = Client::new(&base, &key)?;
         client.current_user()?;
-        self.target = Some(Target {
-            client,
-            base: cfg.url,
-        });
+        self.target = Some(Target { client, base });
         Ok(())
     }
 
@@ -102,13 +100,13 @@ pub fn to_item(issue: &Issue, base: &str, today: NaiveDate) -> Item {
         .priority
         .as_ref()
         .and_then(|p| p.name.split(" - ").next())
-        .map(str::trim)
+        .map(printable)
         .filter(|name| !name.is_empty());
-    let mut parts: Vec<String> = priority.map(str::to_string).into_iter().collect();
+    let mut parts: Vec<String> = priority.into_iter().collect();
     parts.extend(late_days.map(|days| late_subtitle(i18n::current(), days)));
     Item {
         id: issue.id.to_string(),
-        title: issue.subject.clone(),
+        title: printable(&issue.subject),
         subtitle: (!parts.is_empty()).then(|| parts.join(" · ")),
         url: Some(format!(
             "{}/issues/{}",
