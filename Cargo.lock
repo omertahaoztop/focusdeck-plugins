@@ -407,6 +407,7 @@ dependencies = [
 [[package]]
 name = "focusdeck-protocol"
 version = "0.1.0"
+source = "git+https://github.com/omertahaoztop/focusdeck?tag=v0.1.0#db13bca0e1cf7e9d84bd5df02d2b7282a8e288d0"
 dependencies = [
  "chrono",
  "serde",

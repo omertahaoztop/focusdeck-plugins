@@ -8,7 +8,7 @@ license.workspace = true
 [dependencies]
 base64.workspace = true
 chrono.workspace = true
-focusdeck-protocol = { path = "../../../focusdeck/crates/focusdeck-protocol" }
+focusdeck-protocol = { git = "https://github.com/omertahaoztop/focusdeck", tag = "v0.1.0" }
 getrandom.workspace = true
 reqwest = { workspace = true, features = ["form"] }
 serde.workspace = true
