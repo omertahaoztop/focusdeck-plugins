@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use focusdeck_plugin_common::{StatusReason, Transport, http_client, null_as_default};
 use reqwest::StatusCode;
 use reqwest::blocking::{Client as Http, RequestBuilder, Response};
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
+use seenboard_plugin_common::{StatusReason, Transport, http_client, null_as_default};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer};
 use serde_json::{Value, json};
@@ -99,7 +99,7 @@ impl Client {
         let mut headers = HeaderMap::new();
         headers.insert(AUTHORIZATION, auth);
         let http = http_client(
-            concat!("focusdeck-vikunja/", env!("CARGO_PKG_VERSION")),
+            concat!("seenboard-vikunja/", env!("CARGO_PKG_VERSION")),
             Duration::from_secs(10),
             &[base],
         )

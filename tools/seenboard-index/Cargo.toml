@@ -1,5 +1,5 @@
 [package]
-name = "focusdeck-index"
+name = "seenboard-index"
 version = "0.1.0"
 description = "Updates the plugin index file index.toml"
 edition.workspace = true
@@ -8,5 +8,6 @@ license.workspace = true
 [dependencies]
 clap.workspace = true
 semver.workspace = true
+seenboard-protocol = { git = "https://github.com/omertahaoztop/seenboard", tag = "v0.5.0" }
 serde.workspace = true
 toml.workspace = true

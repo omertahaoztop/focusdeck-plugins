@@ -2,11 +2,11 @@ use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 
 use chrono::{Local, NaiveDate, TimeZone};
-use focusdeck_protocol::{ActionParams, ListParams, PROTOCOL_VERSION, Plugin, View};
-use focusdeck_redmine::client::Issue;
-use focusdeck_redmine::i18n;
-use focusdeck_redmine::plugin::{Redmine, late_subtitle, to_item};
 use mockito::{Matcher, Mock, ServerGuard};
+use seenboard_protocol::{ActionParams, ListParams, PROTOCOL_VERSION, Plugin, View};
+use seenboard_redmine::client::Issue;
+use seenboard_redmine::i18n;
+use seenboard_redmine::plugin::{Redmine, late_subtitle, to_item};
 use serde_json::{Value, json};
 use tempfile::NamedTempFile;
 
@@ -61,7 +61,7 @@ fn page(server: &mut ServerGuard, offset: u64, issues: Vec<Value>, total: u64) -
         .create()
 }
 
-fn list(plugin: &mut Redmine) -> Result<Vec<focusdeck_protocol::Item>, String> {
+fn list(plugin: &mut Redmine) -> Result<Vec<seenboard_protocol::Item>, String> {
     plugin.list(ListParams {
         view: View::Summary,
     })
@@ -291,11 +291,11 @@ fn empty_key_file_fails_configure() {
 #[test]
 fn missing_key_file_fails_configure() {
     let server = mockito::Server::new();
-    let cfg = json!({"url": server.url(), "key_file": "/nonexistent/focusdeck-key"});
+    let cfg = json!({"url": server.url(), "key_file": "/nonexistent/seenboard-key"});
     let err = Redmine::default().configure(cfg).unwrap_err();
     assert_eq!(
         err,
-        "Redmine key file could not be read: /nonexistent/focusdeck-key"
+        "Redmine key file could not be read: /nonexistent/seenboard-key"
     );
 }
 

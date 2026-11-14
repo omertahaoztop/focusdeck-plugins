@@ -1,12 +1,12 @@
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 
-use focusdeck_protocol::{
+use mockito::{Matcher, Mock, ServerGuard};
+use seenboard_protocol::{
     ActionParams, DropParams, Item, Link, ListParams, PROTOCOL_VERSION, Plugin, RemindersParams,
     Source, View,
 };
-use focusdeck_vikunja::plugin::Vikunja;
-use mockito::{Matcher, Mock, ServerGuard};
+use seenboard_vikunja::plugin::Vikunja;
 use serde_json::{Value, json};
 use tempfile::NamedTempFile;
 
@@ -59,7 +59,7 @@ fn kanban_views() -> Value {
 fn base_mocks(server: &mut ServerGuard, views: Value) -> Vec<Mock> {
     vec![
         mock(server, "GET", "/api/v1/projects?per_page=200&page=1")
-            .match_header("user-agent", Matcher::Regex("^focusdeck-vikunja/".into()))
+            .match_header("user-agent", Matcher::Regex("^seenboard-vikunja/".into()))
             .with_body(json!([{"id": 3, "title": "Başka"}, {"id": 9, "title": "Home"}]).to_string())
             .create(),
         mock(server, "GET", "/api/v1/projects?per_page=200&page=2")
@@ -260,7 +260,7 @@ fn configure_unauthorized_hides_token() {
 #[test]
 fn configure_reports_missing_token_file() {
     let server = mockito::Server::new();
-    let cfg = json!({"url": server.url(), "token_file": "/nonexistent/focusdeck-token", "project": "Home"});
+    let cfg = json!({"url": server.url(), "token_file": "/nonexistent/seenboard-token", "project": "Home"});
     let err = Vikunja::default().configure(cfg).unwrap_err();
     assert!(err.starts_with("Could not read token file"), "{err}");
 }
@@ -323,7 +323,7 @@ fn list_due_handling() {
 fn list_reads_source_from_description() {
     let mut c = ctx(None);
     let mut t = task(1, "bağlı", 1.0);
-    t["description"] = json!("<p>not</p><p>focusdeck-source: redmine:12345</p>");
+    t["description"] = json!("<p>not</p><p>seenboard-source: redmine:12345</p>");
     view_tasks(
         &mut c.server,
         json!([{"id": 59, "title": "Yeni", "tasks": [t, task(2, "serbest", 2.0)]}]),
@@ -598,7 +598,7 @@ fn drop_writes_item_source_into_description() {
     let mut c = ctx(None);
     let create = mock(&mut c.server, "PUT", "/api/v1/projects/9/tasks")
         .match_body(Matcher::PartialJson(
-            json!({"description": "<p>focusdeck-source: redmine:12345</p>"}),
+            json!({"description": "<p>seenboard-source: redmine:12345</p>"}),
         ))
         .with_body(created_task())
         .create();
@@ -616,7 +616,7 @@ fn drop_uses_from_as_source_when_item_has_none() {
     let mut c = ctx(None);
     let create = mock(&mut c.server, "PUT", "/api/v1/projects/9/tasks")
         .match_body(Matcher::PartialJson(
-            json!({"description": "<p>focusdeck-source: redmine:12345</p>"}),
+            json!({"description": "<p>seenboard-source: redmine:12345</p>"}),
         ))
         .with_body(created_task())
         .create();
@@ -1023,9 +1023,9 @@ fn list_takes_the_last_source_marker() {
     let mut c = ctx(None);
     let mut t = task(1, "bağlı", 1.0);
     t["description"] =
-        json!("<p>focusdeck-source: zulip:999</p><p>focusdeck-source: redmine:12345</p>");
+        json!("<p>seenboard-source: zulip:999</p><p>seenboard-source: redmine:12345</p>");
     let mut escaped = task(2, "kaçak", 2.0);
-    escaped["description"] = json!("<p>focusdeck-source: redmine:1\u{1b}[31m</p>");
+    escaped["description"] = json!("<p>seenboard-source: redmine:1\u{1b}[31m</p>");
     view_tasks(
         &mut c.server,
         json!([{"id": 59, "title": "Yeni", "tasks": [t, escaped]}]),
@@ -1252,7 +1252,7 @@ fn stranger_is_left_alone(c: &mut Ctx, origin_id: &str, url: &str) {
     let create = mock(&mut c.server, "PUT", "/api/v1/projects/9/tasks")
         .match_body(Matcher::Json(json!({
             "title": "taşınan",
-            "description": format!("<p>focusdeck-source: vikunja:{origin_id}</p>"),
+            "description": format!("<p>seenboard-source: vikunja:{origin_id}</p>"),
         })))
         .with_body(created_task())
         .expect(1)

@@ -1,21 +1,21 @@
 [package]
-name = "focusdeck-vikunja"
-version = "0.2.0"
+name = "seenboard-vikunja"
+version = "0.3.0"
 description = "Open tasks of a Vikunja project"
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
 chrono.workspace = true
-focusdeck-i18n = { git = "https://github.com/omertahaoztop/focusdeck", tag = "v0.2.0" }
-focusdeck-plugin-common.workspace = true
-focusdeck-protocol = { git = "https://github.com/omertahaoztop/focusdeck", tag = "v0.2.0" }
+seenboard-i18n = { git = "https://github.com/omertahaoztop/seenboard", tag = "v0.5.0" }
+seenboard-plugin-common.workspace = true
+seenboard-protocol = { git = "https://github.com/omertahaoztop/seenboard", tag = "v0.5.0" }
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
 [build-dependencies]
-focusdeck-i18n = { git = "https://github.com/omertahaoztop/focusdeck", tag = "v0.2.0" }
+seenboard-i18n = { git = "https://github.com/omertahaoztop/seenboard", tag = "v0.5.0" }
 
 [dev-dependencies]
 mockito.workspace = true

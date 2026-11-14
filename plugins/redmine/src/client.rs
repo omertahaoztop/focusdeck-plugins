@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use focusdeck_plugin_common::{StatusReason, Transport, http_client, null_as_default};
 use reqwest::blocking::{Client as Http, Response};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use seenboard_plugin_common::{StatusReason, Transport, http_client, null_as_default};
 use serde::Deserialize;
 
 use crate::i18n::{msg, t, t_args};
@@ -45,7 +45,7 @@ impl Client {
         let mut headers = HeaderMap::new();
         headers.insert(HeaderName::from_static("x-redmine-api-key"), value);
         let http = http_client(
-            concat!("focusdeck-redmine/", env!("CARGO_PKG_VERSION")),
+            concat!("seenboard-redmine/", env!("CARGO_PKG_VERSION")),
             Duration::from_secs(15),
             &[base],
         )

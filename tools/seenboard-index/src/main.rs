@@ -3,10 +3,10 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use focusdeck_index::{Entry, Target, check_tag, set_entry};
+use seenboard_index::{Entry, Target, check_tag, set_entry};
 
 #[derive(Parser)]
-#[command(about = "Updates the focusdeck plugin index")]
+#[command(about = "Updates the seenboard plugin index")]
 struct Cli {
     #[command(subcommand)]
     command: Command,

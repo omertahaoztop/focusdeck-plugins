@@ -1,6 +1,6 @@
-use focusdeck_i18n::Localizer;
-use focusdeck_plugin_common::{SecretError, UrlError, checked_base, printable, read_secret};
-use focusdeck_protocol::{ActionParams, Describe, Item, ListParams, PROTOCOL_VERSION, Plugin};
+use seenboard_i18n::Localizer;
+use seenboard_plugin_common::{SecretError, UrlError, checked_base, printable, read_secret};
+use seenboard_protocol::{ActionParams, Describe, Item, ListParams, PROTOCOL_VERSION, Plugin};
 use serde::Deserialize;
 use serde_json::Value;
 

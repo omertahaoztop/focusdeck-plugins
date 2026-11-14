@@ -1,8 +1,8 @@
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Datelike, FixedOffset, Utc};
-use focusdeck_plugin_common::{SecretError, UrlError, checked_base, printable, read_secret};
-use focusdeck_protocol::{
+use seenboard_plugin_common::{SecretError, UrlError, checked_base, printable, read_secret};
+use seenboard_protocol::{
     ActionParams, Describe, DropParams, Item, ListParams, PROTOCOL_VERSION, Plugin, Reminder,
     RemindersParams, Source,
 };
@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 use crate::client::{Client, Label, Task};
 use crate::i18n::{msg, t, t_args};
 
-const SOURCE_MARKER: &str = "focusdeck-source: ";
+const SOURCE_MARKER: &str = "seenboard-source: ";
 const DEFAULT_FROM_LABEL_PREFIX: &str = "kimden:";
 const LINK_SCHEMES: [&str; 3] = ["https://", "http://", "mailto:"];
 const POSITION_STEP: f64 = 65536.0;
@@ -483,7 +483,7 @@ fn description_html(item: &Item, source: Option<&Source>) -> String {
             .collect();
         html.push_str(&format!("<p>{}</p>", links.join(" ")));
     }
-    html = html.replace(SOURCE_MARKER, "focusdeck-source&#58; ");
+    html = html.replace(SOURCE_MARKER, "seenboard-source&#58; ");
     if let Some(source) = source {
         html.push_str(&format!(
             "<p>{SOURCE_MARKER}{}</p>",
@@ -549,7 +549,7 @@ mod tests {
 
         #[test]
         fn a_written_source_reads_back_whatever_the_text_above_it_says(
-            text in "\\PC*|\\PC{0,8}focusdeck-source: [a-z]{1,5}:[0-9]{1,5}\\PC{0,8}",
+            text in "\\PC*|\\PC{0,8}seenboard-source: [a-z]{1,5}:[0-9]{1,5}\\PC{0,8}",
             plugin in "[a-z][a-z0-9-]{0,11}",
             id in "[A-Za-z0-9_./-]{1,24}",
         ) {

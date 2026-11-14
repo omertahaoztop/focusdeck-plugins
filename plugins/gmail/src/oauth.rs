@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use focusdeck_plugin_common::checked_url;
 use reqwest::Url;
 use reqwest::blocking::Client as Http;
+use seenboard_plugin_common::checked_url;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 

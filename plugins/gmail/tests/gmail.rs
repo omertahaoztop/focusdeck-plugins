@@ -3,13 +3,13 @@ use std::net::TcpStream;
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Duration, Local};
-use focusdeck_gmail::client::Message;
-use focusdeck_gmail::i18n;
-use focusdeck_gmail::login::{self, LoginArgs};
-use focusdeck_gmail::oauth;
-use focusdeck_gmail::plugin::{Gmail, age_label, to_item};
-use focusdeck_protocol::{ActionParams, ListParams, PROTOCOL_VERSION, Plugin, View};
 use mockito::{Matcher, Mock, ServerGuard};
+use seenboard_gmail::client::Message;
+use seenboard_gmail::i18n;
+use seenboard_gmail::login::{self, LoginArgs};
+use seenboard_gmail::oauth;
+use seenboard_gmail::plugin::{Gmail, age_label, to_item};
+use seenboard_protocol::{ActionParams, ListParams, PROTOCOL_VERSION, Plugin, View};
 use serde_json::{Value, json};
 use tempfile::{NamedTempFile, TempDir};
 
@@ -77,7 +77,7 @@ fn configured(server: &mut ServerGuard) -> (Gmail, Files, Mock) {
     (plugin, files, token)
 }
 
-fn list(plugin: &mut Gmail) -> Result<Vec<focusdeck_protocol::Item>, String> {
+fn list(plugin: &mut Gmail) -> Result<Vec<seenboard_protocol::Item>, String> {
     plugin.list(ListParams {
         view: View::Summary,
     })
@@ -728,7 +728,7 @@ fn login_exchanges_code_and_writes_token() {
 
     exchange.assert();
     let page = rx.recv().unwrap();
-    assert!(page.ends_with("focusdeck: Gmail connected, you can close this tab."));
+    assert!(page.ends_with("seenboard: Gmail connected, you can close this tab."));
     assert_eq!(
         oauth::pkce_challenge(&verifier.lock().unwrap()),
         *challenge.lock().unwrap()

@@ -2,9 +2,9 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use focusdeck_plugin_common::{StatusReason, Transport, http_client, null_as_default};
 use reqwest::Url;
 use reqwest::blocking::{Client as Http, RequestBuilder, Response};
+use seenboard_plugin_common::{StatusReason, Transport, http_client, null_as_default};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -66,7 +66,7 @@ impl Client {
         since: Option<DateTime<Utc>>,
     ) -> Result<Self, String> {
         let http = http_client(
-            concat!("focusdeck-whatsapp/", env!("CARGO_PKG_VERSION")),
+            concat!("seenboard-whatsapp/", env!("CARGO_PKG_VERSION")),
             Duration::from_secs(15),
             &[base],
         )

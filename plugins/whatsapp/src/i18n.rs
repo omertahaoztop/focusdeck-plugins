@@ -1,1 +1,1 @@
-focusdeck_i18n::localized!();
+seenboard_i18n::localized!();

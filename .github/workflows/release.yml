@@ -38,18 +38,18 @@ jobs:
           [[ "$name" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || { echo "Invalid plugin name in tag" >&2; exit 1; }
           [[ "$version" =~ ^[0-9A-Za-z.+-]+$ ]] || { echo "Invalid version in tag" >&2; exit 1; }
           package=$(cargo metadata --format-version 1 --no-deps \
-            | jq -r --arg pkg "focusdeck-$name" '.packages[] | select(.name == $pkg) | .version')
-          [ -n "$package" ] || { echo "focusdeck-$name package not found" >&2; exit 1; }
-          cargo run --locked -p focusdeck-index -- check-tag \
+            | jq -r --arg pkg "seenboard-$name" '.packages[] | select(.name == $pkg) | .version')
+          [ -n "$package" ] || { echo "seenboard-$name package not found" >&2; exit 1; }
+          cargo run --locked -p seenboard-index -- check-tag \
             --tag="$TAG" --name="$name" --version="$package"
           echo "NAME=$name" >> "$GITHUB_ENV"
       - name: Build
-        run: cargo build --release --locked -p "focusdeck-$NAME"
+        run: cargo build --release --locked -p "seenboard-$NAME"
       - name: Package
         run: |
           set -euo pipefail
           mkdir dist
-          mv "target/release/focusdeck-$NAME" "dist/$NAME-$TRIPLE"
+          mv "target/release/seenboard-$NAME" "dist/$NAME-$TRIPLE"
           (cd dist && sha256sum "$NAME-$TRIPLE" > "$NAME-$TRIPLE.sha256")
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -121,7 +121,7 @@ jobs:
           fi
       - run: rustup toolchain install
       - name: Build index tool
-        run: cargo build --locked -p focusdeck-index
+        run: cargo build --locked -p seenboard-index
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
@@ -133,12 +133,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          tool="$GITHUB_WORKSPACE/target/debug/focusdeck-index"
+          tool="$GITHUB_WORKSPACE/target/debug/seenboard-index"
           name="${TAG%-v*}"
           version="${TAG##*-v}"
           description=$(cd "$GITHUB_WORKSPACE" && env -u GH_TOKEN cargo metadata --format-version 1 --no-deps \
-            | jq -r --arg pkg "focusdeck-$name" '.packages[] | select(.name == $pkg) | .description')
-          [ -n "$description" ] || { echo "focusdeck-$name has no description" >&2; exit 1; }
+            | jq -r --arg pkg "seenboard-$name" '.packages[] | select(.name == $pkg) | .description')
+          [ -n "$description" ] || { echo "seenboard-$name has no description" >&2; exit 1; }
           args=()
           for triple in x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
             sum=$(cut -d' ' -f1 "$GITHUB_WORKSPACE/dist/$name-$triple.sha256")

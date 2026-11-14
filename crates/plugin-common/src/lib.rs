@@ -271,7 +271,7 @@ mod tests {
         std::fs::write(file.path(), " \n\t").unwrap();
         assert_eq!(read_secret(path), Err(SecretError::Empty));
         assert_eq!(
-            read_secret("/nonexistent/focusdeck-secret"),
+            read_secret("/nonexistent/seenboard-secret"),
             Err(SecretError::Unreadable)
         );
     }

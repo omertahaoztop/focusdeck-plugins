@@ -4,11 +4,11 @@ use std::os::unix::fs::PermissionsExt;
 use chrono::{
     DateTime, FixedOffset, Local, LocalResult, NaiveDate, NaiveDateTime, TimeDelta, TimeZone, Utc,
 };
-use focusdeck_protocol::{ActionParams, Item, ListParams, PROTOCOL_VERSION, Plugin, View};
-use focusdeck_whatsapp::client::Message;
-use focusdeck_whatsapp::i18n;
-use focusdeck_whatsapp::plugin::{WhatsApp, parse_since_in, to_item_in};
 use mockito::{Matcher, Mock, ServerGuard};
+use seenboard_protocol::{ActionParams, Item, ListParams, PROTOCOL_VERSION, Plugin, View};
+use seenboard_whatsapp::client::Message;
+use seenboard_whatsapp::i18n;
+use seenboard_whatsapp::plugin::{WhatsApp, parse_since_in, to_item_in};
 use serde_json::{Value, json};
 use tempfile::NamedTempFile;
 
@@ -121,7 +121,7 @@ fn listing(server: &mut ServerGuard, offset: usize, data: Vec<Value>, total: usi
         .match_header("authorization", BASIC)
         .match_header(
             "user-agent",
-            Matcher::Regex(r"^focusdeck-whatsapp/\d+\.\d+\.\d+".into()),
+            Matcher::Regex(r"^seenboard-whatsapp/\d+\.\d+\.\d+".into()),
         )
         .match_query(Matcher::AllOf(vec![
             Matcher::UrlEncoded("limit".into(), "100".into()),
@@ -155,7 +155,7 @@ fn item_of(value: Value) -> Item {
 fn describe_matches_contract() {
     let d = bare().describe();
     assert_eq!(d.name, "whatsapp");
-    assert_eq!(d.version, "0.2.0");
+    assert_eq!(d.version, "0.3.0");
     assert_eq!(d.protocol, PROTOCOL_VERSION);
     assert_eq!(d.actions, ["done"]);
     assert!(!d.accepts_drop && !d.reminders);

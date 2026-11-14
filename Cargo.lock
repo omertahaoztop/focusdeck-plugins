@@ -415,127 +415,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
-name = "focusdeck-gmail"
-version = "0.2.0"
-dependencies = [
- "base64",
- "chrono",
- "focusdeck-i18n",
- "focusdeck-plugin-common",
- "focusdeck-protocol",
- "getrandom 0.4.3",
- "mockito",
- "proptest",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
-]
-
-[[package]]
-name = "focusdeck-i18n"
-version = "0.2.0"
-source = "git+https://github.com/omertahaoztop/focusdeck?tag=v0.2.0#a7ebf0aba35585c92f5550d33b7b47dfb2f52eaa"
-dependencies = [
- "fluent-bundle",
- "fluent-syntax",
- "unic-langid",
-]
-
-[[package]]
-name = "focusdeck-index"
-version = "0.1.0"
-dependencies = [
- "clap",
- "semver",
- "serde",
- "toml",
-]
-
-[[package]]
-name = "focusdeck-plugin-common"
-version = "0.1.0"
-dependencies = [
- "mockito",
- "proptest",
- "reqwest",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "focusdeck-protocol"
-version = "0.2.0"
-source = "git+https://github.com/omertahaoztop/focusdeck?tag=v0.2.0#a7ebf0aba35585c92f5550d33b7b47dfb2f52eaa"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "focusdeck-redmine"
-version = "0.2.0"
-dependencies = [
- "chrono",
- "focusdeck-i18n",
- "focusdeck-plugin-common",
- "focusdeck-protocol",
- "mockito",
- "reqwest",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "focusdeck-vikunja"
-version = "0.2.0"
-dependencies = [
- "chrono",
- "focusdeck-i18n",
- "focusdeck-plugin-common",
- "focusdeck-protocol",
- "mockito",
- "proptest",
- "reqwest",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "focusdeck-whatsapp"
-version = "0.2.0"
-dependencies = [
- "chrono",
- "focusdeck-i18n",
- "focusdeck-plugin-common",
- "focusdeck-protocol",
- "mockito",
- "reqwest",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "focusdeck-zulip"
-version = "0.2.0"
-dependencies = [
- "focusdeck-i18n",
- "focusdeck-plugin-common",
- "focusdeck-protocol",
- "mockito",
- "reqwest",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
 name = "form_urlencoded"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1615,6 +1494,128 @@ checksum = "6ce2691df843ecc5d231c0b14ece2acc3efb62c0a398c7e1d875f3983ce020e3"
 dependencies = [
  "core-foundation-sys",
  "libc",
+]
+
+[[package]]
+name = "seenboard-gmail"
+version = "0.3.0"
+dependencies = [
+ "base64",
+ "chrono",
+ "getrandom 0.4.3",
+ "mockito",
+ "proptest",
+ "reqwest",
+ "seenboard-i18n",
+ "seenboard-plugin-common",
+ "seenboard-protocol",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
+name = "seenboard-i18n"
+version = "0.2.0"
+source = "git+https://github.com/omertahaoztop/seenboard?tag=v0.5.0#8f973450c2a20cc86e4dbc92422ddfb7e1a4eb7f"
+dependencies = [
+ "fluent-bundle",
+ "fluent-syntax",
+ "unic-langid",
+]
+
+[[package]]
+name = "seenboard-index"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "seenboard-protocol",
+ "semver",
+ "serde",
+ "toml",
+]
+
+[[package]]
+name = "seenboard-plugin-common"
+version = "0.1.0"
+dependencies = [
+ "mockito",
+ "proptest",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "seenboard-protocol"
+version = "0.2.0"
+source = "git+https://github.com/omertahaoztop/seenboard?tag=v0.5.0#8f973450c2a20cc86e4dbc92422ddfb7e1a4eb7f"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "seenboard-redmine"
+version = "0.3.0"
+dependencies = [
+ "chrono",
+ "mockito",
+ "reqwest",
+ "seenboard-i18n",
+ "seenboard-plugin-common",
+ "seenboard-protocol",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "seenboard-vikunja"
+version = "0.3.0"
+dependencies = [
+ "chrono",
+ "mockito",
+ "proptest",
+ "reqwest",
+ "seenboard-i18n",
+ "seenboard-plugin-common",
+ "seenboard-protocol",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "seenboard-whatsapp"
+version = "0.3.0"
+dependencies = [
+ "chrono",
+ "mockito",
+ "reqwest",
+ "seenboard-i18n",
+ "seenboard-plugin-common",
+ "seenboard-protocol",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "seenboard-zulip"
+version = "0.3.0"
+dependencies = [
+ "mockito",
+ "reqwest",
+ "seenboard-i18n",
+ "seenboard-plugin-common",
+ "seenboard-protocol",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

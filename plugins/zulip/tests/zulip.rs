@@ -1,11 +1,11 @@
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 
-use focusdeck_protocol::{ActionParams, ListParams, PROTOCOL_VERSION, Plugin, View};
-use focusdeck_zulip::client::Message;
-use focusdeck_zulip::i18n;
-use focusdeck_zulip::plugin::{Zulip, to_item, to_item_in};
 use mockito::{Matcher, Mock, ServerGuard};
+use seenboard_protocol::{ActionParams, ListParams, PROTOCOL_VERSION, Plugin, View};
+use seenboard_zulip::client::Message;
+use seenboard_zulip::i18n;
+use seenboard_zulip::plugin::{Zulip, to_item, to_item_in};
 use serde_json::{Value, json};
 use tempfile::NamedTempFile;
 
@@ -84,7 +84,7 @@ fn messages(
         .match_header("authorization", BASIC)
         .match_header(
             "user-agent",
-            Matcher::Regex(r"^focusdeck-zulip/\d+\.\d+\.\d+".into()),
+            Matcher::Regex(r"^seenboard-zulip/\d+\.\d+\.\d+".into()),
         )
         .match_query(Matcher::AllOf(query))
         .with_body(
@@ -97,7 +97,7 @@ fn messages(
         .create()
 }
 
-fn list(plugin: &mut Zulip) -> Result<Vec<focusdeck_protocol::Item>, String> {
+fn list(plugin: &mut Zulip) -> Result<Vec<seenboard_protocol::Item>, String> {
     plugin.list(ListParams {
         view: View::Summary,
     })
@@ -202,7 +202,7 @@ fn unstar_posts_remove_flag() {
         .match_header("authorization", BASIC)
         .match_header(
             "user-agent",
-            Matcher::Regex(r"^focusdeck-zulip/\d+\.\d+\.\d+".into()),
+            Matcher::Regex(r"^seenboard-zulip/\d+\.\d+\.\d+".into()),
         )
         .match_body(Matcher::AllOf(vec![
             Matcher::UrlEncoded("messages".into(), "[42]".into()),

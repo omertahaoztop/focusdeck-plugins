@@ -401,7 +401,7 @@ mod tests {
         assert!(ico.starts_with("HTTP/1.1 404"), "{ico}");
         assert!(ok.starts_with("HTTP/1.1 200"), "{ok}");
         assert!(
-            ok.ends_with("focusdeck: Gmail connected, you can close this tab."),
+            ok.ends_with("seenboard: Gmail connected, you can close this tab."),
             "{ok}"
         );
     }
@@ -471,7 +471,7 @@ mod tests {
         ] {
             let err = args(list).err().unwrap();
             assert!(
-                err.contains("focusdeck-gmail login --client-file <path> --token-file <path>"),
+                err.contains("seenboard-gmail login --client-file <path> --token-file <path>"),
                 "{err}"
             );
         }

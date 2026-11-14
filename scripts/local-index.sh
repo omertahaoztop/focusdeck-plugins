@@ -13,7 +13,7 @@ out="$root/dist/index.toml"
 
 for manifest in plugins/*/Cargo.toml; do
   name=$(basename "$(dirname "$manifest")")
-  bin="$root/target/release/focusdeck-$name"
+  bin="$root/target/release/seenboard-$name"
   sum=$(sha256sum "$bin" | cut -d' ' -f1)
   version=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$manifest" | head -n1)
   description=$(sed -n 's/^description = "\(.*\)"$/\1/p' "$manifest" | head -n1)
@@ -22,7 +22,7 @@ for manifest in plugins/*/Cargo.toml; do
 name = "$name"
 description = "$description"
 version = "$version"
-protocol = 1
+protocol = 2
 
 [plugin.targets.$host]
 url = "file://$bin"

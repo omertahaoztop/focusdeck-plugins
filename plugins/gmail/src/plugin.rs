@@ -1,7 +1,7 @@
 use chrono::{DateTime, Duration, Local, Utc};
-use focusdeck_i18n::Localizer;
-use focusdeck_plugin_common::{checked_url, printable};
-use focusdeck_protocol::{ActionParams, Describe, Item, ListParams, PROTOCOL_VERSION, Plugin};
+use seenboard_i18n::Localizer;
+use seenboard_plugin_common::{checked_url, printable};
+use seenboard_protocol::{ActionParams, Describe, Item, ListParams, PROTOCOL_VERSION, Plugin};
 use serde::Deserialize;
 use serde_json::Value;
 

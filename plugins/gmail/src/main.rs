@@ -1,15 +1,15 @@
 use std::io;
 use std::process::ExitCode;
 
-use focusdeck_gmail::i18n;
-use focusdeck_gmail::login::{self, LoginArgs};
-use focusdeck_gmail::plugin::Gmail;
+use seenboard_gmail::i18n;
+use seenboard_gmail::login::{self, LoginArgs};
+use seenboard_gmail::plugin::Gmail;
 
 fn main() -> io::Result<ExitCode> {
-    i18n::init(focusdeck_i18n::requested(
+    i18n::init(seenboard_i18n::requested(
         None,
         |k| std::env::var(k).ok(),
-        &focusdeck_i18n::PLUGIN_ENV,
+        &seenboard_i18n::PLUGIN_ENV,
     ));
     let mut args = std::env::args().skip(1);
     if args.next().as_deref() == Some("login") {
@@ -21,6 +21,6 @@ fn main() -> io::Result<ExitCode> {
             }
         });
     }
-    focusdeck_protocol::serve(Gmail::default(), io::stdin().lock(), io::stdout().lock())?;
+    seenboard_protocol::serve(Gmail::default(), io::stdin().lock(), io::stdout().lock())?;
     Ok(ExitCode::SUCCESS)
 }

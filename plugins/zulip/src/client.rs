@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use focusdeck_plugin_common::{StatusReason, Transport, http_client, null_as_default};
 use reqwest::blocking::{Client as Http, RequestBuilder, Response};
+use seenboard_plugin_common::{StatusReason, Transport, http_client, null_as_default};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -45,7 +45,7 @@ pub struct Client {
 impl Client {
     pub fn new(base: &str, email: &str, key: &str) -> Result<Self, String> {
         let http = http_client(
-            concat!("focusdeck-zulip/", env!("CARGO_PKG_VERSION")),
+            concat!("seenboard-zulip/", env!("CARGO_PKG_VERSION")),
             Duration::from_secs(15),
             &[base],
         )

@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
+use seenboard_protocol::PROTOCOL_VERSION;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
-const PROTOCOL: u32 = 1;
 const SHA256_LEN: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -99,7 +99,7 @@ pub fn set_entry(index: &str, entry: Entry) -> Result<String, String> {
         name: entry.name,
         description: entry.description,
         version: entry.version,
-        protocol: PROTOCOL,
+        protocol: PROTOCOL_VERSION,
         targets: entry.targets,
     });
     parsed.plugin.sort_by(|a, b| a.name.cmp(&b.name));
@@ -205,7 +205,8 @@ mod tests {
         let out = set_entry("", entry("redmine", "0.1.0")).unwrap();
         let plugin = &parse(&out).plugin[0];
         assert_eq!(plugin.description, "redmine description");
-        assert_eq!(plugin.protocol, 1);
+        assert_eq!(plugin.protocol, PROTOCOL_VERSION);
+        assert_eq!(plugin.protocol, 2);
         assert_eq!(plugin.targets.len(), 2);
         let x86 = &plugin.targets[X86];
         assert_eq!(x86.url, format!("https://example.com/redmine-{X86}"));

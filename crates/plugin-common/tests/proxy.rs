@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use focusdeck_plugin_common::http_client;
+use seenboard_plugin_common::http_client;
 
 #[test]
 fn plain_http_to_this_machine_skips_the_environment_proxy() {

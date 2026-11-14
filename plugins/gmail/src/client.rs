@@ -2,9 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use focusdeck_plugin_common::{StatusReason, Transport, UrlError, http_client};
 use reqwest::blocking::{Client as Http, Response};
 use reqwest::{StatusCode, Url};
+use seenboard_plugin_common::{StatusReason, Transport, UrlError, http_client};
 use serde::Deserialize;
 
 use crate::i18n::{msg, t, t_args};
@@ -221,7 +221,7 @@ impl Client {
 pub(crate) fn http(targets: &[&Url]) -> Result<Http, String> {
     let targets: Vec<&str> = targets.iter().map(|url| url.as_str()).collect();
     http_client(
-        concat!("focusdeck-gmail/", env!("CARGO_PKG_VERSION")),
+        concat!("seenboard-gmail/", env!("CARGO_PKG_VERSION")),
         Duration::from_secs(15),
         &targets,
     )
@@ -234,7 +234,7 @@ fn session_lost() -> String {
     let bin = bin
         .as_deref()
         .and_then(Path::to_str)
-        .unwrap_or("focusdeck-gmail");
+        .unwrap_or("seenboard-gmail");
     t_args(msg::SESSION_LOST, &[("bin", bin.into())])
 }
 

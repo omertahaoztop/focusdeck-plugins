@@ -1,20 +1,22 @@
-# focusdeck-plugins
+# seenboard-plugins
 
 **English** · [Türkçe](README.tr.md)
 
-Plugins for [focusdeck](https://github.com/omertahaoztop/focusdeck). Each plugin is a separate process that talks to the core with one JSON message per line.
+Plugins for [Seenboard](https://github.com/omertahaoztop/seenboard). Each plugin is a separate process that talks to the core with one JSON message per line.
+
+Seenboard was called focusdeck before. These plugins target protocol 2, speak `SEENBOARD_LANG` and install under the new names; plugin binaries from the focusdeck era (protocol 1) are not compatible and must be reinstalled.
 
 Plugins run with your user's permissions; there is no sandbox. Only install from indexes you trust.
 
-Plugins speak the language focusdeck passes in `FOCUSDECK_LANG`; run directly they use `LC_ALL`/`LC_MESSAGES`/`LANG`. English and Turkish are included, and any other language falls back to English.
+Plugins speak the language seenboard passes in `SEENBOARD_LANG`; run directly they use `LC_ALL`/`LC_MESSAGES`/`LANG`. English and Turkish are included, and any other language falls back to English.
 
 ## Install
 
 ```
-focusdeck plugin install <name>
+seenboard plugin install <name>
 ```
 
-The core picks this machine's target from the `index.toml` index, downloads the binary and checks its sha256. Plugin names: `vikunja`, `redmine`, `zulip`, `whatsapp`, `gmail`. A plugin's settings go in the `config` table of its box in the profile `~/.config/focusdeck/profiles/<name>.toml` (`config.toml` only holds `default_profile`, `registries`, `capture_command`, `language` and `capture_words`). Settings whose name ends in `_file` point at the file that holds a secret; its mode must be `0600`.
+The core picks this machine's target from the `index.toml` index, downloads the binary and checks its sha256. Plugin names: `vikunja`, `redmine`, `zulip`, `whatsapp`, `gmail`. A plugin's settings go in the `config` table of its box in the profile `~/.config/seenboard/profiles/<name>.toml` (`config.toml` only holds `default_profile`, `registries`, `capture_command`, `language` and `capture_words`). Settings whose name ends in `_file` point at the file that holds a secret; its mode must be `0600`.
 
 ```toml
 [[box]]
@@ -23,7 +25,7 @@ title = "Redmine plan"
 plugin = "redmine"
 row = 0
 col = 0
-config = { url = "https://redmine.example.com", key_file = "~/.config/focusdeck/secrets/redmine" }
+config = { url = "https://redmine.example.com", key_file = "~/.config/seenboard/secrets/redmine" }
 ```
 
 The keys in the tables below go in this `config` table.
@@ -46,7 +48,7 @@ Profile settings:
 
 Project and bucket titles are matched exactly first, then ignoring case.
 
-In incoming notes, `from` becomes a `<from_label_prefix><name>` label (`kimden:<name>` by default), `labels` become labels and `links` become a links paragraph in the description. Only `http`, `https` and `mailto` links are written as links; for any other only the label is kept, as plain text. For an item coming from another box, its source is written to the description as a `focusdeck-source: <plugin>:<id>` line. If labelling the new task or moving it to the bucket fails, the task is deleted again, so a retry leaves no duplicate. If the delete fails as well, the error names the task that was left behind.
+In incoming notes, `from` becomes a `<from_label_prefix><name>` label (`kimden:<name>` by default), `labels` become labels and `links` become a links paragraph in the description. Only `http`, `https` and `mailto` links are written as links; for any other only the label is kept, as plain text. For an item coming from another box, its source is written to the description as a `seenboard-source: <plugin>:<id>` line. If labelling the new task or moving it to the bucket fails, the task is deleted again, so a retry leaves no duplicate. If the delete fails as well, the error names the task that was left behind.
 
 A note dropped from another vikunja box is moved instead of copied when its link points at this server and the task still exists there. Otherwise a new task is created.
 
@@ -96,7 +98,7 @@ title = "WhatsApp"
 plugin = "whatsapp"
 row = 0
 col = 1
-config = { url = "https://gowa.example.com", user = "focusdeck", key_file = "~/.config/focusdeck/secrets/gowa.key", jid = "15550001111@s.whatsapp.net", since = "2026-11-01" }
+config = { url = "https://gowa.example.com", user = "seenboard", key_file = "~/.config/seenboard/secrets/gowa.key", jid = "15550001111@s.whatsapp.net", since = "2026-11-01" }
 ```
 
 ## gmail
@@ -114,10 +116,10 @@ Profile settings:
 To create the token once:
 
 ```
-~/.local/share/focusdeck/plugins/gmail login --client-file <path> --token-file <path> [--hint <email>]
+~/.local/share/seenboard/plugins/gmail login --client-file <path> --token-file <path> [--hint <email>]
 ```
 
-`focusdeck plugin install gmail` puts the binary at that path under the name `gmail`. If you built from source, the same command is `cargo run -p focusdeck-gmail -- login ...` or the built `focusdeck-gmail login ...`. If the session expires, the plugin's error gives the `login` command with the full path of the binary that is running.
+`seenboard plugin install gmail` puts the binary at that path under the name `gmail`. If you built from source, the same command is `cargo run -p seenboard-gmail -- login ...` or the built `seenboard-gmail login ...`. If the session expires, the plugin's error gives the `login` command with the full path of the binary that is running.
 
 The command prints an address to open in the browser and, after you approve, writes the token to the `--token-file` path with mode `0600`. It waits 5 minutes for the approval and only accepts the answer to the sign-in it started.
 
@@ -133,7 +135,7 @@ Each plugin is released with its own tag. First bump the version in `plugins/<na
 git tag <name>-v<version> && git push origin <name>-v<version>
 ```
 
-The tag must look like `<name>-v<version>` and match the package version, which must be semver. The workflow builds binaries for two targets, opens a GitHub release and updates `index.toml`. The index tool refuses a version older than the one already in `index.toml`. The repository has immutable releases turned on and a tag ruleset on `*-v*`, so a published release cannot be changed and its tag cannot be moved or deleted. When the workflow runs again for the same tag, it keeps the published files and updates the index from them. A draft left behind by a failed run is filled again from the new build and then published. Each binary gets a build provenance attestation; check one with `gh attestation verify <file> --repo omertahaoztop/focusdeck-plugins`. Push at most three tags at once: when more than three tags arrive in one push, GitHub starts no workflow at all.
+The tag must look like `<name>-v<version>` and match the package version, which must be semver. The workflow builds binaries for two targets, opens a GitHub release and updates `index.toml`. The index tool refuses a version older than the one already in `index.toml`. The repository has immutable releases turned on and a tag ruleset on `*-v*`, so a published release cannot be changed and its tag cannot be moved or deleted. When the workflow runs again for the same tag, it keeps the published files and updates the index from them. A draft left behind by a failed run is filled again from the new build and then published. Each binary gets a build provenance attestation; check one with `gh attestation verify <file> --repo omertahaoztop/seenboard-plugins`. Push at most three tags at once: when more than three tags arrive in one push, GitHub starts no workflow at all.
 
 ## Trying it locally
 
