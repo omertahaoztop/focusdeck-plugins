@@ -8,7 +8,7 @@ Seenboard was called focusdeck before. These plugins target protocol 2, speak `S
 
 Plugins run with your user's permissions; there is no sandbox. Only install from indexes you trust.
 
-Plugins speak the language seenboard passes in `SEENBOARD_LANG`; run directly they use `LC_ALL`/`LC_MESSAGES`/`LANG`. English and Turkish are included, and any other language falls back to English.
+Plugins speak the language Seenboard passes in `SEENBOARD_LANG`; run directly they use `LC_ALL`/`LC_MESSAGES`/`LANG`. English and Turkish are included, and any other language falls back to English.
 
 ## Install
 

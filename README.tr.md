@@ -8,7 +8,7 @@ Seenboard'un eski adı focusdeck'ti. Bu plugin'ler protokol 2'yi hedefler, `SEEN
 
 Plugin'ler kullanıcının yetkisiyle çalışır, kum havuzu yoktur. Yalnız güvendiğin dizinlerden kur.
 
-Plugin'ler seenboard'in `SEENBOARD_LANG` ile ilettiği dili konuşur; doğrudan çalıştırılınca `LC_ALL`/`LC_MESSAGES`/`LANG` kullanılır. İngilizce ve Türkçe hazır gelir, başka her dil İngilizceye düşer.
+Plugin'ler Seenboard'un `SEENBOARD_LANG` ile ilettiği dili konuşur; doğrudan çalıştırılınca `LC_ALL`/`LC_MESSAGES`/`LANG` kullanılır. İngilizce ve Türkçe hazır gelir, başka her dil İngilizceye düşer.
 
 ## Kurulum
 

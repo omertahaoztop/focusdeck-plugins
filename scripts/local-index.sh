@@ -6,6 +6,7 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$root"
 
 cargo build --release
+tool="$root/target/release/seenboard-index"
 host=$(rustc -vV | sed -n 's/^host: //p')
 mkdir -p dist
 out="$root/dist/index.toml"
@@ -17,18 +18,10 @@ for manifest in plugins/*/Cargo.toml; do
   sum=$(sha256sum "$bin" | cut -d' ' -f1)
   version=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$manifest" | head -n1)
   description=$(sed -n 's/^description = "\(.*\)"$/\1/p' "$manifest" | head -n1)
-  cat >> "$out" <<ENTRY
-[[plugin]]
-name = "$name"
-description = "$description"
-version = "$version"
-protocol = 2
-
-[plugin.targets.$host]
-url = "file://$bin"
-sha256 = "$sum"
-
-ENTRY
+  "$tool" set --index "$out" --name "$name" --description "$description" \
+    --version "$version" --target "$host=https://localhost$bin,$sum"
 done
+
+sed -i 's#"https://localhost/#"file:///#' "$out"
 
 echo "$out"
