@@ -29,16 +29,16 @@ sha256 = "25ece5600b22b5ecb12fe48125a7ba03098e8088a881b85957749efd10085361"
 [[plugin]]
 name = "vikunja"
 description = "Open tasks of a Vikunja project"
-version = "0.2.0"
-protocol = 1
+version = "0.3.0"
+protocol = 2
 
 [plugin.targets.aarch64-unknown-linux-gnu]
-url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/vikunja-v0.2.0/vikunja-aarch64-unknown-linux-gnu"
-sha256 = "93cc393259b9d168e4373f1818b538f84c488fc836cbae5ccc72b250074303a1"
+url = "https://github.com/omertahaoztop/seenboard-plugins/releases/download/vikunja-v0.3.0/vikunja-aarch64-unknown-linux-gnu"
+sha256 = "44a3b5d1634f71142909f2d36b18d7abb8bf7653522430d4f5b4f70fd85816ed"
 
 [plugin.targets.x86_64-unknown-linux-gnu]
-url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/vikunja-v0.2.0/vikunja-x86_64-unknown-linux-gnu"
-sha256 = "09ccb8c45ef89a8a48f57ad6935e5dad7a066b63c8b3181bba00c01d6c5d7d6a"
+url = "https://github.com/omertahaoztop/seenboard-plugins/releases/download/vikunja-v0.3.0/vikunja-x86_64-unknown-linux-gnu"
+sha256 = "e2df81158513b95cde3a9a8ff814e82fcdf08490ae9a47b03059883a4b77f183"
 
 [[plugin]]
 name = "whatsapp"
