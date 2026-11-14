@@ -15,16 +15,16 @@ sha256 = "a904b3d3d040b82b21bcc09e4a8a12cd1aca4769b9f5b25655d7da2bc5559a34"
 [[plugin]]
 name = "redmine"
 description = "Open Redmine issues assigned to me"
-version = "0.2.0"
-protocol = 1
+version = "0.3.0"
+protocol = 2
 
 [plugin.targets.aarch64-unknown-linux-gnu]
-url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/redmine-v0.2.0/redmine-aarch64-unknown-linux-gnu"
-sha256 = "181fd32b644c47558295338eacbefbd71847ebf6d83b775f867a87f34df1877a"
+url = "https://github.com/omertahaoztop/seenboard-plugins/releases/download/redmine-v0.3.0/redmine-aarch64-unknown-linux-gnu"
+sha256 = "c4aa8c9198d378ef6039c76c36f0c193950c49ac8f13276d82f464ca6b5dc174"
 
 [plugin.targets.x86_64-unknown-linux-gnu]
-url = "https://github.com/omertahaoztop/focusdeck-plugins/releases/download/redmine-v0.2.0/redmine-x86_64-unknown-linux-gnu"
-sha256 = "7f58fecfa7140d758b4bb52d11ce5ceedd5077482f521f43b0593c5f2fea6ba8"
+url = "https://github.com/omertahaoztop/seenboard-plugins/releases/download/redmine-v0.3.0/redmine-x86_64-unknown-linux-gnu"
+sha256 = "25ece5600b22b5ecb12fe48125a7ba03098e8088a881b85957749efd10085361"
 
 [[plugin]]
 name = "vikunja"
